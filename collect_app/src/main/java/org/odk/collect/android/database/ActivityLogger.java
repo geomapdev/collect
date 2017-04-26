@@ -73,7 +73,7 @@ public final class ActivityLogger {
     private static final String DATABASE_TABLE = "log";
     private static final String ENABLE_LOGGING = "enabled";
     private static final int DATABASE_VERSION = 1;
-    private static final String DATABASE_NAME = "activityLog.db";
+    private static final String DATABASE_NAME = "activityLogKobo.db";
     // Database columns
     private static final String ID = "_id";
     private static final String TIMESTAMP = "timestamp";
