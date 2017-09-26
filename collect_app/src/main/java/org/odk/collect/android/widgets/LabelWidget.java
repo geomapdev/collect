@@ -14,10 +14,11 @@
 
 package org.odk.collect.android.widgets;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.util.TypedValue;
 import android.util.DisplayMetrics;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -30,7 +31,6 @@ import android.widget.TextView;
 
 import org.javarosa.core.model.SelectChoice;
 import org.javarosa.core.model.data.IAnswerData;
-import org.javarosa.core.model.data.helper.Selection;
 import org.javarosa.core.reference.InvalidReferenceException;
 import org.javarosa.core.reference.ReferenceManager;
 import org.javarosa.form.api.FormEntryCaption;
@@ -54,11 +54,11 @@ import timber.log.Timber;
  *
  * @author Jeff Beorse
  */
+@SuppressLint("ViewConstructor")
 public class LabelWidget extends QuestionWidget {
 
-    List<SelectChoice> mItems;
+    List<SelectChoice> items;
     View center;
-
 
     public LabelWidget(Context context, FormEntryPrompt prompt) {
         super(context, prompt);
@@ -67,27 +67,22 @@ public class LabelWidget extends QuestionWidget {
         XPathFuncExpr xpathFuncExpr = ExternalDataUtil.getSearchXPathExpression(
                 prompt.getAppearanceHint());
         if (xpathFuncExpr != null) {
-            mItems = ExternalDataUtil.populateExternalChoices(prompt, xpathFuncExpr);
+            items = ExternalDataUtil.populateExternalChoices(prompt, xpathFuncExpr);
         } else {
-            mItems = prompt.getSelectChoices();
+            items = prompt.getSelectChoices();
         }
 
         // Layout holds the horizontal list of buttons
         LinearLayout buttonLayout = new LinearLayout(context);
 
-        String s = null;
-        if (prompt.getAnswerValue() != null) {
-            s = ((Selection) prompt.getAnswerValue().getValue()).getValue();
-        }
-
-        if (mItems != null) {
-            for (int i = 0; i < mItems.size(); i++) {
+        if (items != null) {
+            for (int i = 0; i < items.size(); i++) {
 
                 String imageURI;
-                if (mItems.get(i) instanceof ExternalSelectChoice) {
-                    imageURI = ((ExternalSelectChoice) mItems.get(i)).getImage();
+                if (items.get(i) instanceof ExternalSelectChoice) {
+                    imageURI = ((ExternalSelectChoice) items.get(i)).getImage();
                 } else {
-                    imageURI = prompt.getSpecialFormSelectChoiceText(mItems.get(i),
+                    imageURI = prompt.getSpecialFormSelectChoiceText(items.get(i),
                             FormEntryCaption.TEXT_FORM_IMAGE);
                 }
 
@@ -102,7 +97,7 @@ public class LabelWidget extends QuestionWidget {
                 if (imageURI != null) {
                     try {
                         String imageFilename =
-                                ReferenceManager._().DeriveReference(imageURI).getLocalURI();
+                                ReferenceManager.instance().DeriveReference(imageURI).getLocalURI();
                         final File imageFile = new File(imageFilename);
                         if (imageFile.exists()) {
                             Bitmap b = null;
@@ -131,7 +126,7 @@ public class LabelWidget extends QuestionWidget {
                                 errorMsg = getContext().getString(R.string.file_invalid, imageFile);
 
                             }
-                        } else if (errorMsg == null) {
+                        } else {
                             // An error hasn't been logged. We should have an image, but the file
                             // doesn't
                             // exist.
@@ -147,18 +142,18 @@ public class LabelWidget extends QuestionWidget {
                             missingImage.setPadding(2, 2, 2, 2);
                             missingImage.setId(labelId);
                         }
+
                     } catch (InvalidReferenceException e) {
                         Timber.e(e, "Invalid image reference");
                     }
-                } else {
-                    // There's no imageURI listed, so just ignore it.
+
                 }
 
                 // build text label. Don't assign the text to the built in label to he
                 // button because it aligns horizontally, and we want the label on top
                 TextView label = new TextView(getContext());
-                label.setText(prompt.getSelectChoiceText(mItems.get(i)));
-                label.setTextSize(TypedValue.COMPLEX_UNIT_DIP, mAnswerFontsize);
+                label.setText(prompt.getSelectChoiceText(items.get(i)));
+                label.setTextSize(TypedValue.COMPLEX_UNIT_DIP, answerFontsize);
                 label.setGravity(Gravity.CENTER_HORIZONTAL);
 
                 // answer layout holds the label text/image on top and the radio button on bottom

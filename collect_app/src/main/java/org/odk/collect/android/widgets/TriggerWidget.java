@@ -14,6 +14,7 @@
 
 package org.odk.collect.android.widgets;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.util.TypedValue;
 import android.view.Gravity;
@@ -33,84 +34,81 @@ import org.odk.collect.android.application.Collect;
  *
  * @author Yaw Anokwa (yanokwa@gmail.com)
  */
+@SuppressLint("ViewConstructor")
 public class TriggerWidget extends QuestionWidget {
 
-    private CheckBox mTriggerButton;
-    private TextView mStringAnswer;
-    private static final String mOK = "OK";
+    public static final String OK_TEXT = "OK";
 
-    private FormEntryPrompt mPrompt;
-
-
-    public FormEntryPrompt getPrompt() {
-        return mPrompt;
-    }
+    private CheckBox triggerButton;
+    private TextView stringAnswer;
+    private FormEntryPrompt prompt;
 
 
     public TriggerWidget(Context context, FormEntryPrompt prompt) {
         super(context, prompt);
-        mPrompt = prompt;
+        this.prompt = prompt;
 
-        mTriggerButton = new CheckBox(getContext());
-        mTriggerButton.setId(QuestionWidget.newUniqueId());
-        mTriggerButton.setText(getContext().getString(R.string.trigger));
-        mTriggerButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, mAnswerFontsize);
+        triggerButton = new CheckBox(getContext());
+        triggerButton.setId(QuestionWidget.newUniqueId());
+        triggerButton.setText(getContext().getString(R.string.trigger));
+        triggerButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, answerFontsize);
         // mActionButton.setPadding(20, 20, 20, 20);
-        mTriggerButton.setEnabled(!prompt.isReadOnly());
+        triggerButton.setEnabled(!prompt.isReadOnly());
 
-        mTriggerButton.setOnClickListener(new View.OnClickListener() {
+        triggerButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if (mTriggerButton.isChecked()) {
-                    mStringAnswer.setText(mOK);
+                if (triggerButton.isChecked()) {
+                    stringAnswer.setText(OK_TEXT);
                     Collect.getInstance().getActivityLogger().logInstanceAction(TriggerWidget.this,
                             "triggerButton",
-                            "OK", mPrompt.getIndex());
+                            "OK", TriggerWidget.this.prompt.getIndex());
                 } else {
-                    mStringAnswer.setText(null);
+                    stringAnswer.setText(null);
                     Collect.getInstance().getActivityLogger().logInstanceAction(TriggerWidget.this,
                             "triggerButton",
-                            "null", mPrompt.getIndex());
+                            "null", TriggerWidget.this.prompt.getIndex());
                 }
             }
         });
 
-        mStringAnswer = new TextView(getContext());
-        mStringAnswer.setId(QuestionWidget.newUniqueId());
-        mStringAnswer.setTextSize(TypedValue.COMPLEX_UNIT_DIP, mAnswerFontsize);
-        mStringAnswer.setGravity(Gravity.CENTER);
+        stringAnswer = new TextView(getContext());
+        stringAnswer.setId(QuestionWidget.newUniqueId());
+        stringAnswer.setTextSize(TypedValue.COMPLEX_UNIT_DIP, answerFontsize);
+        stringAnswer.setGravity(Gravity.CENTER);
 
         String s = prompt.getAnswerText();
         if (s != null) {
-            if (s.equals(mOK)) {
-                mTriggerButton.setChecked(true);
+            if (s.equals(OK_TEXT)) {
+                triggerButton.setChecked(true);
             } else {
-                mTriggerButton.setChecked(false);
+                triggerButton.setChecked(false);
             }
-            mStringAnswer.setText(s);
+            stringAnswer.setText(s);
 
         }
 
         // finish complex layout
-        addAnswerView(mTriggerButton);
+        addAnswerView(triggerButton);
     }
 
+    public FormEntryPrompt getPrompt() {
+        return prompt;
+    }
 
     @Override
     public void clearAnswer() {
-        mStringAnswer.setText(null);
-        mTriggerButton.setChecked(false);
+        stringAnswer.setText(null);
+        triggerButton.setChecked(false);
     }
 
 
     @Override
     public IAnswerData getAnswer() {
-        String s = mStringAnswer.getText().toString();
-        if (s == null || s.equals("")) {
-            return null;
-        } else {
-            return new StringData(s);
-        }
+        String s = stringAnswer.getText().toString();
+        return !s.isEmpty()
+                ? new StringData(s)
+                : null;
     }
 
 
@@ -125,16 +123,19 @@ public class TriggerWidget extends QuestionWidget {
 
     @Override
     public void setOnLongClickListener(OnLongClickListener l) {
-        mTriggerButton.setOnLongClickListener(l);
-        mStringAnswer.setOnLongClickListener(l);
+        triggerButton.setOnLongClickListener(l);
+        stringAnswer.setOnLongClickListener(l);
     }
 
 
     @Override
     public void cancelLongPress() {
         super.cancelLongPress();
-        mTriggerButton.cancelLongPress();
-        mStringAnswer.cancelLongPress();
+        triggerButton.cancelLongPress();
+        stringAnswer.cancelLongPress();
     }
 
+    public CheckBox getTriggerButton() {
+        return triggerButton;
+    }
 }

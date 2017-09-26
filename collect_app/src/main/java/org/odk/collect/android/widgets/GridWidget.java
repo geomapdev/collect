@@ -14,16 +14,16 @@
 
 package org.odk.collect.android.widgets;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.Color;
-import android.util.TypedValue;
+import android.support.annotation.Nullable;
 import android.util.DisplayMetrics;
-import android.view.Display;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.WindowManager;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
@@ -65,7 +65,8 @@ import timber.log.Timber;
  *
  * @author Jeff Beorse (jeff@beorse.net)
  */
-public class GridWidget extends QuestionWidget {
+@SuppressLint("ViewConstructor")
+public class GridWidget extends QuestionWidget implements MultiChoiceWidget {
 
     // The RGB value for the orange background
     public static final int orangeRedVal = 255;
@@ -78,7 +79,7 @@ public class GridWidget extends QuestionWidget {
     private static final int IMAGE_PADDING = 8;
     private static final int SCROLL_WIDTH = 16;
 
-    List<SelectChoice> mItems;
+    List<SelectChoice> items;
 
     // The possible select choices
     String[] choices;
@@ -93,69 +94,64 @@ public class GridWidget extends QuestionWidget {
     View[] imageViews;
     AudioHandler[] audioHandlers;
 
-    // The number of columns in the grid, can be user defined (<= 0 if unspecified)
-    int numColumns;
-
     // Whether to advance immediately after the image is clicked
     boolean quickAdvance;
 
-    AdvanceToNextListener listener;
+    @Nullable
+    private AdvanceToNextListener listener;
 
     int resizeWidth;
 
     public GridWidget(Context context, FormEntryPrompt prompt, int numColumns,
-            final boolean quickAdvance) {
+                      final boolean quickAdvance) {
         super(context, prompt);
 
         // SurveyCTO-added support for dynamic select content (from .csv files)
         XPathFuncExpr xpathFuncExpr = ExternalDataUtil.getSearchXPathExpression(
                 prompt.getAppearanceHint());
         if (xpathFuncExpr != null) {
-            mItems = ExternalDataUtil.populateExternalChoices(prompt, xpathFuncExpr);
+            items = ExternalDataUtil.populateExternalChoices(prompt, xpathFuncExpr);
         } else {
-            mItems = prompt.getSelectChoices();
+            items = prompt.getSelectChoices();
         }
-        mPrompt = prompt;
-        listener = (AdvanceToNextListener) context;
+        formEntryPrompt = prompt;
 
-        selected = new boolean[mItems.size()];
-        choices = new String[mItems.size()];
+        if (context instanceof AdvanceToNextListener) {
+            listener = (AdvanceToNextListener) context;
+        }
+
+        selected = new boolean[items.size()];
+        choices = new String[items.size()];
         gridview = new ExpandedHeightGridView(context);
-        imageViews = new View[mItems.size()];
-        audioHandlers = new AudioHandler[mItems.size()];
+        imageViews = new View[items.size()];
+        audioHandlers = new AudioHandler[items.size()];
         // The max width of an icon in a given column. Used to line
         // up the columns and automatically fit the columns in when
         // they are chosen automatically
         int maxColumnWidth = -1;
         int maxCellHeight = -1;
-        this.numColumns = numColumns;
-        for (int i = 0; i < mItems.size(); i++) {
+
+        for (int i = 0; i < items.size(); i++) {
             imageViews[i] = new ImageView(getContext());
         }
         this.quickAdvance = quickAdvance;
 
-        Display display =
-                ((WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE))
-                        .getDefaultDisplay();
         DisplayMetrics metrics = context.getResources().getDisplayMetrics();
         int screenWidth = metrics.widthPixels;
         int screenHeight = metrics.heightPixels;
 
-        if (display.getOrientation() % 2 == 1) {
-            // rotated 90 degrees...
-            int temp = screenWidth;
-            screenWidth = screenHeight;
-            screenHeight = temp;
-        }
-
         if (numColumns > 0) {
             resizeWidth = ((screenWidth - 2 * HORIZONTAL_PADDING - SCROLL_WIDTH
-                    - (IMAGE_PADDING + SPACING) * numColumns) / numColumns);
+                    - (IMAGE_PADDING + SPACING) * (numColumns + 1)) / numColumns);
+        }
+
+        if (prompt.isReadOnly()) {
+            gridview.setEnabled(false);
         }
 
         // Build view
-        for (int i = 0; i < mItems.size(); i++) {
-            SelectChoice sc = mItems.get(i);
+        for (int i = 0; i < items.size(); i++) {
+            SelectChoice sc = items.get(i);
 
             int curHeight = -1;
 
@@ -164,14 +160,14 @@ public class GridWidget extends QuestionWidget {
                     prompt.getSpecialFormSelectChoiceText(sc, FormEntryCaption.TEXT_FORM_AUDIO);
             if (audioURI != null) {
                 audioHandlers[i] = new AudioHandler(prompt.getIndex(), sc.getValue(), audioURI,
-                        mPlayer);
+                        player);
             } else {
                 audioHandlers[i] = null;
             }
             // Read the image sizes and set maxColumnWidth. This allows us to make sure all of our
             // columns are going to fit
             String imageURI;
-            if (mItems.get(i) instanceof ExternalSelectChoice) {
+            if (items.get(i) instanceof ExternalSelectChoice) {
                 imageURI = ((ExternalSelectChoice) sc).getImage();
             } else {
                 imageURI = prompt.getSpecialFormSelectChoiceText(sc,
@@ -184,7 +180,9 @@ public class GridWidget extends QuestionWidget {
 
                 String imageFilename;
                 try {
-                    imageFilename = ReferenceManager._().DeriveReference(imageURI).getLocalURI();
+                    imageFilename = ReferenceManager.instance()
+                            .DeriveReference(imageURI).getLocalURI();
+
                     final File imageFile = new File(imageFilename);
                     if (imageFile.exists()) {
                         Bitmap b =
@@ -234,7 +232,7 @@ public class GridWidget extends QuestionWidget {
                 choices[i] = prompt.getSelectChoiceText(sc);
 
                 TextView missingImage = new TextView(getContext());
-                missingImage.setTextSize(TypedValue.COMPLEX_UNIT_DIP, mAnswerFontsize);
+                missingImage.setTextSize(TypedValue.COMPLEX_UNIT_DIP, answerFontsize);
                 missingImage.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
                 missingImage.setPadding(IMAGE_PADDING, IMAGE_PADDING, IMAGE_PADDING, IMAGE_PADDING);
 
@@ -313,11 +311,13 @@ public class GridWidget extends QuestionWidget {
                 selected[position] = true;
                 Collect.getInstance().getActivityLogger().logInstanceAction(this,
                         "onItemClick.select",
-                        mItems.get(position).getValue(), mPrompt.getIndex());
+                        items.get(position).getValue(), formEntryPrompt.getIndex());
                 imageViews[position].setBackgroundColor(Color.rgb(orangeRedVal, orangeGreenVal,
                         orangeBlueVal));
-                if (quickAdvance) {
+
+                if (quickAdvance && listener != null) {
                     listener.advance();
+
                 } else if (audioHandlers[position] != null) {
                     audioHandlers[position].playAudio(getContext());
                 }
@@ -330,8 +330,8 @@ public class GridWidget extends QuestionWidget {
             s = ((Selection) prompt.getAnswerValue().getValue()).getValue();
         }
 
-        for (int i = 0; i < mItems.size(); ++i) {
-            String match = mItems.get(i).getValue();
+        for (int i = 0; i < items.size(); ++i) {
+            String match = items.get(i).getValue();
 
             selected[i] = match.equals(s);
             if (selected[i]) {
@@ -351,7 +351,7 @@ public class GridWidget extends QuestionWidget {
     public IAnswerData getAnswer() {
         for (int i = 0; i < choices.length; ++i) {
             if (selected[i]) {
-                SelectChoice sc = mItems.get(i);
+                SelectChoice sc = items.get(i);
                 return new SelectOneData(new Selection(sc));
             }
         }
@@ -361,7 +361,7 @@ public class GridWidget extends QuestionWidget {
 
     @Override
     public void clearAnswer() {
-        for (int i = 0; i < mItems.size(); ++i) {
+        for (int i = 0; i < items.size(); ++i) {
             selected[i] = false;
             imageViews[i].setBackgroundColor(0);
         }
@@ -378,13 +378,38 @@ public class GridWidget extends QuestionWidget {
 
     }
 
+    @Override
+    public void setOnLongClickListener(OnLongClickListener l) {
+        gridview.setOnLongClickListener(l);
+    }
+
+    @Override
+    public void cancelLongPress() {
+        super.cancelLongPress();
+        gridview.cancelLongPress();
+    }
+
+    @Override
+    public int getChoiceCount() {
+        return selected.length;
+    }
+
+    @Override
+    public void setChoiceSelected(int choiceIndex, boolean isSelected) {
+        for (int i = 0; i < selected.length; i++) {
+            selected[i] = false;
+        }
+
+        selected[choiceIndex] = isSelected;
+    }
+
     // Custom image adapter. Most of the code is copied from
     // media layout for using a picture.
     private class ImageAdapter extends BaseAdapter {
         private String[] choices;
 
 
-        public ImageAdapter(Context c, String[] choices) {
+        ImageAdapter(Context c, String[] choices) {
             this.choices = choices;
         }
 
@@ -412,18 +437,5 @@ public class GridWidget extends QuestionWidget {
                 return convertView;
             }
         }
-    }
-
-
-    @Override
-    public void setOnLongClickListener(OnLongClickListener l) {
-        gridview.setOnLongClickListener(l);
-    }
-
-
-    @Override
-    public void cancelLongPress() {
-        super.cancelLongPress();
-        gridview.cancelLongPress();
     }
 }

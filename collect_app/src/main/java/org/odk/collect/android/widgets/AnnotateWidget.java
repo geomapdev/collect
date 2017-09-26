@@ -14,6 +14,7 @@
 
 package org.odk.collect.android.widgets;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.ActivityNotFoundException;
 import android.content.ContentValues;
@@ -22,14 +23,13 @@ import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
 import android.provider.MediaStore.Images;
-import android.util.TypedValue;
+import android.support.annotation.Nullable;
 import android.util.DisplayMetrics;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.TableLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -54,52 +54,42 @@ import timber.log.Timber;
  * @author Carl Hartung (carlhartung@gmail.com)
  * @author Yaw Anokwa (yanokwa@gmail.com)
  */
-public class AnnotateWidget extends QuestionWidget implements IBinaryWidget {
-    private static final String t = "AnnotateWidget";
+@SuppressLint("ViewConstructor")
+public class AnnotateWidget extends QuestionWidget implements FileWidget {
 
-    private Button mCaptureButton;
-    private Button mChooseButton;
-    private Button mAnnotateButton;
-    private ImageView mImageView;
+    private Button captureButton;
+    private Button chooseButton;
+    private Button annotateButton;
 
-    private String mBinaryName;
+    @Nullable
+    private ImageView imageView;
 
-    private String mInstanceFolder;
+    private String binaryName;
 
-    private TextView mErrorTextView;
+    private String instanceFolder;
+
+    private TextView errorTextView;
 
     public AnnotateWidget(Context context, FormEntryPrompt prompt) {
         super(context, prompt);
 
-        mInstanceFolder = Collect.getInstance().getFormController()
+        instanceFolder = Collect.getInstance().getFormController()
                 .getInstancePath().getParent();
 
-        TableLayout.LayoutParams params = new TableLayout.LayoutParams();
-        params.setMargins(7, 5, 7, 5);
+        errorTextView = new TextView(context);
+        errorTextView.setId(QuestionWidget.newUniqueId());
+        errorTextView.setText(R.string.selected_invalid_image);
 
-        mErrorTextView = new TextView(context);
-        mErrorTextView.setId(QuestionWidget.newUniqueId());
-        mErrorTextView.setText(R.string.selected_invalid_image);
-
-        // setup capture button
-        mCaptureButton = new Button(getContext());
-        mCaptureButton.setId(QuestionWidget.newUniqueId());
-        mCaptureButton.setText(getContext().getString(R.string.capture_image));
-        mCaptureButton
-                .setTextSize(TypedValue.COMPLEX_UNIT_DIP, mAnswerFontsize);
-        mCaptureButton.setPadding(20, 20, 20, 20);
-        mCaptureButton.setEnabled(!prompt.isReadOnly());
-        mCaptureButton.setLayoutParams(params);
-
-        // launch capture intent on click
-        mCaptureButton.setOnClickListener(new View.OnClickListener() {
+        captureButton = getSimpleButton(getContext().getString(R.string.capture_image));
+        captureButton.setEnabled(!prompt.isReadOnly());
+        captureButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 Collect.getInstance()
                         .getActivityLogger()
                         .logInstanceAction(this, "captureButton", "click",
-                                mPrompt.getIndex());
-                mErrorTextView.setVisibility(View.GONE);
+                                formEntryPrompt.getIndex());
+                errorTextView.setVisibility(View.GONE);
                 Intent i = new Intent(
                         android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
                 // We give the camera an absolute filename/path where to put the
@@ -116,7 +106,7 @@ public class AnnotateWidget extends QuestionWidget implements IBinaryWidget {
                         Uri.fromFile(new File(Collect.TMPFILE_PATH)));
                 try {
                     Collect.getInstance().getFormController()
-                            .setIndexWaitingForData(mPrompt.getIndex());
+                            .setIndexWaitingForData(formEntryPrompt.getIndex());
                     ((Activity) getContext()).startActivityForResult(i,
                             FormEntryActivity.IMAGE_CAPTURE);
                 } catch (ActivityNotFoundException e) {
@@ -132,30 +122,22 @@ public class AnnotateWidget extends QuestionWidget implements IBinaryWidget {
             }
         });
 
-        // setup chooser button
-        mChooseButton = new Button(getContext());
-        mChooseButton.setId(QuestionWidget.newUniqueId());
-        mChooseButton.setText(getContext().getString(R.string.choose_image));
-        mChooseButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, mAnswerFontsize);
-        mChooseButton.setPadding(20, 20, 20, 20);
-        mChooseButton.setEnabled(!prompt.isReadOnly());
-        mChooseButton.setLayoutParams(params);
-
-        // launch capture intent on click
-        mChooseButton.setOnClickListener(new View.OnClickListener() {
+        chooseButton = getSimpleButton(getContext().getString(R.string.choose_image));
+        chooseButton.setEnabled(!prompt.isReadOnly());
+        chooseButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 Collect.getInstance()
                         .getActivityLogger()
                         .logInstanceAction(this, "chooseButton", "click",
-                                mPrompt.getIndex());
-                mErrorTextView.setVisibility(View.GONE);
+                                formEntryPrompt.getIndex());
+                errorTextView.setVisibility(View.GONE);
                 Intent i = new Intent(Intent.ACTION_GET_CONTENT);
                 i.setType("image/*");
 
                 try {
                     Collect.getInstance().getFormController()
-                            .setIndexWaitingForData(mPrompt.getIndex());
+                            .setIndexWaitingForData(formEntryPrompt.getIndex());
                     ((Activity) getContext()).startActivityForResult(i,
                             FormEntryActivity.IMAGE_CHOOSER);
                 } catch (ActivityNotFoundException e) {
@@ -170,23 +152,15 @@ public class AnnotateWidget extends QuestionWidget implements IBinaryWidget {
             }
         });
 
-        // setup Blank Image Button
-        mAnnotateButton = new Button(getContext());
-        mAnnotateButton.setId(QuestionWidget.newUniqueId());
-        mAnnotateButton.setText(getContext().getString(R.string.markup_image));
-        mAnnotateButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP,
-                mAnswerFontsize);
-        mAnnotateButton.setPadding(20, 20, 20, 20);
-        mAnnotateButton.setEnabled(false);
-        mAnnotateButton.setLayoutParams(params);
-        // launch capture intent on click
-        mAnnotateButton.setOnClickListener(new View.OnClickListener() {
+        annotateButton = getSimpleButton(getContext().getString(R.string.markup_image));
+        annotateButton.setEnabled(false);
+        annotateButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 Collect.getInstance()
                         .getActivityLogger()
                         .logInstanceAction(this, "annotateButton", "click",
-                                mPrompt.getIndex());
+                                formEntryPrompt.getIndex());
                 launchAnnotateActivity();
             }
         });
@@ -195,71 +169,71 @@ public class AnnotateWidget extends QuestionWidget implements IBinaryWidget {
         LinearLayout answerLayout = new LinearLayout(getContext());
         answerLayout.setOrientation(LinearLayout.VERTICAL);
 
-        answerLayout.addView(mCaptureButton);
-        answerLayout.addView(mChooseButton);
-        answerLayout.addView(mAnnotateButton);
-        answerLayout.addView(mErrorTextView);
+        answerLayout.addView(captureButton);
+        answerLayout.addView(chooseButton);
+        answerLayout.addView(annotateButton);
+        answerLayout.addView(errorTextView);
 
         // and hide the capture, choose and annotate button if read-only
         if (prompt.isReadOnly()) {
-            mCaptureButton.setVisibility(View.GONE);
-            mChooseButton.setVisibility(View.GONE);
-            mAnnotateButton.setVisibility(View.GONE);
+            captureButton.setVisibility(View.GONE);
+            chooseButton.setVisibility(View.GONE);
+            annotateButton.setVisibility(View.GONE);
         }
-        mErrorTextView.setVisibility(View.GONE);
+        errorTextView.setVisibility(View.GONE);
 
         // retrieve answer from data model and update ui
-        mBinaryName = prompt.getAnswerText();
+        binaryName = prompt.getAnswerText();
 
         // Only add the imageView if the user has taken a picture
-        if (mBinaryName != null) {
+        if (binaryName != null) {
             if (!prompt.isReadOnly()) {
-                mAnnotateButton.setEnabled(true);
+                annotateButton.setEnabled(true);
             }
-            mImageView = new ImageView(getContext());
-            mImageView.setId(QuestionWidget.newUniqueId());
+            imageView = new ImageView(getContext());
+            imageView.setId(QuestionWidget.newUniqueId());
             DisplayMetrics metrics = context.getResources().getDisplayMetrics();
             int screenWidth = metrics.widthPixels;
             int screenHeight = metrics.heightPixels;
 
-            File f = new File(mInstanceFolder + File.separator + mBinaryName);
+            File f = new File(instanceFolder + File.separator + binaryName);
 
             if (f.exists()) {
                 Bitmap bmp = FileUtils.getBitmapScaledToDisplay(f,
                         screenHeight, screenWidth);
                 if (bmp == null) {
-                    mErrorTextView.setVisibility(View.VISIBLE);
+                    errorTextView.setVisibility(View.VISIBLE);
                 }
-                mImageView.setImageBitmap(bmp);
+                imageView.setImageBitmap(bmp);
             } else {
-                mImageView.setImageBitmap(null);
+                imageView.setImageBitmap(null);
             }
 
-            mImageView.setPadding(10, 10, 10, 10);
-            mImageView.setAdjustViewBounds(true);
-            mImageView.setOnClickListener(new View.OnClickListener() {
+            imageView.setPadding(10, 10, 10, 10);
+            imageView.setAdjustViewBounds(true);
+            imageView.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     Collect.getInstance()
                             .getActivityLogger()
                             .logInstanceAction(this, "viewImage", "click",
-                                    mPrompt.getIndex());
+                                    formEntryPrompt.getIndex());
                     launchAnnotateActivity();
                 }
             });
 
-            answerLayout.addView(mImageView);
+            answerLayout.addView(imageView);
         }
         addAnswerView(answerLayout);
     }
 
     private void launchAnnotateActivity() {
-        mErrorTextView.setVisibility(View.GONE);
+        errorTextView.setVisibility(View.GONE);
         Intent i = new Intent(getContext(), DrawActivity.class);
         i.putExtra(DrawActivity.OPTION, DrawActivity.OPTION_ANNOTATE);
         // copy...
-        if (mBinaryName != null) {
-            File f = new File(mInstanceFolder + File.separator + mBinaryName);
+        if (binaryName != null) {
+            File f = new File(instanceFolder + File.separator + binaryName);
             i.putExtra(DrawActivity.REF_IMAGE, Uri.fromFile(f));
         }
         i.putExtra(DrawActivity.EXTRA_OUTPUT,
@@ -267,7 +241,7 @@ public class AnnotateWidget extends QuestionWidget implements IBinaryWidget {
 
         try {
             Collect.getInstance().getFormController()
-                    .setIndexWaitingForData(mPrompt.getIndex());
+                    .setIndexWaitingForData(formEntryPrompt.getIndex());
             ((Activity) getContext()).startActivityForResult(i,
                     FormEntryActivity.ANNOTATE_IMAGE);
         } catch (ActivityNotFoundException e) {
@@ -280,13 +254,14 @@ public class AnnotateWidget extends QuestionWidget implements IBinaryWidget {
         }
     }
 
-    private void deleteMedia() {
+    @Override
+    public void deleteFile() {
         // get the file path and delete the file
-        String name = mBinaryName;
+        String name = binaryName;
         // clean up variables
-        mBinaryName = null;
+        binaryName = null;
         // delete from media provider
-        int del = MediaUtils.deleteImageFileFromMediaProvider(mInstanceFolder
+        int del = MediaUtils.deleteImageFileFromMediaProvider(instanceFolder
                 + File.separator + name);
         Timber.i("Deleted %d rows from media content provider", del);
     }
@@ -294,21 +269,24 @@ public class AnnotateWidget extends QuestionWidget implements IBinaryWidget {
     @Override
     public void clearAnswer() {
         // remove the file
-        deleteMedia();
-        mImageView.setImageBitmap(null);
-        mErrorTextView.setVisibility(View.GONE);
-        if (!mPrompt.isReadOnly()) {
-            mAnnotateButton.setEnabled(false);
+        deleteFile();
+        if (imageView != null) {
+            imageView.setImageBitmap(null);
+        }
+
+        errorTextView.setVisibility(View.GONE);
+        if (!formEntryPrompt.isReadOnly()) {
+            annotateButton.setEnabled(false);
         }
 
         // reset buttons
-        mCaptureButton.setText(getContext().getString(R.string.capture_image));
+        captureButton.setText(getContext().getString(R.string.capture_image));
     }
 
     @Override
     public IAnswerData getAnswer() {
-        if (mBinaryName != null) {
-            return new StringData(mBinaryName);
+        if (binaryName != null) {
+            return new StringData(binaryName);
         } else {
             return null;
         }
@@ -318,8 +296,8 @@ public class AnnotateWidget extends QuestionWidget implements IBinaryWidget {
     public void setBinaryData(Object newImageObj) {
         // you are replacing an answer. delete the previous image using the
         // content provider.
-        if (mBinaryName != null) {
-            deleteMedia();
+        if (binaryName != null) {
+            deleteFile();
         }
 
         File newImage = (File) newImageObj;
@@ -335,10 +313,14 @@ public class AnnotateWidget extends QuestionWidget implements IBinaryWidget {
 
             Uri imageURI = getContext().getContentResolver().insert(
                     Images.Media.EXTERNAL_CONTENT_URI, values);
-            Timber.i("Inserting image returned uri = %s", imageURI.toString());
 
-            mBinaryName = newImage.getName();
+            if (imageURI != null) {
+                Timber.i("Inserting image returned uri = %s", imageURI.toString());
+            }
+
+            binaryName = newImage.getName();
             Timber.i("Setting current answer to %s", newImage.getName());
+
         } else {
             Timber.e("NO IMAGE EXISTS at: %s", newImage.getAbsolutePath());
         }
@@ -356,7 +338,7 @@ public class AnnotateWidget extends QuestionWidget implements IBinaryWidget {
 
     @Override
     public boolean isWaitingForBinaryData() {
-        return mPrompt.getIndex().equals(
+        return formEntryPrompt.getIndex().equals(
                 Collect.getInstance().getFormController()
                         .getIndexWaitingForData());
     }
@@ -368,23 +350,22 @@ public class AnnotateWidget extends QuestionWidget implements IBinaryWidget {
 
     @Override
     public void setOnLongClickListener(OnLongClickListener l) {
-        mCaptureButton.setOnLongClickListener(l);
-        mChooseButton.setOnLongClickListener(l);
-        mAnnotateButton.setOnLongClickListener(l);
-        if (mImageView != null) {
-            mImageView.setOnLongClickListener(l);
+        captureButton.setOnLongClickListener(l);
+        chooseButton.setOnLongClickListener(l);
+        annotateButton.setOnLongClickListener(l);
+        if (imageView != null) {
+            imageView.setOnLongClickListener(l);
         }
     }
 
     @Override
     public void cancelLongPress() {
         super.cancelLongPress();
-        mCaptureButton.cancelLongPress();
-        mChooseButton.cancelLongPress();
-        mAnnotateButton.cancelLongPress();
-        if (mImageView != null) {
-            mImageView.cancelLongPress();
+        captureButton.cancelLongPress();
+        chooseButton.cancelLongPress();
+        annotateButton.cancelLongPress();
+        if (imageView != null) {
+            imageView.cancelLongPress();
         }
     }
-
 }

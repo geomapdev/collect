@@ -22,8 +22,8 @@ import timber.log.Timber;
 
 public class ResponseMessageParser {
     private HttpEntity httpEntity;
-    private final String MESSAGE_XML_TAG = "message";
-    public Boolean isValid = false;
+    private static final String MESSAGE_XML_TAG = "message";
+    public boolean isValid;
     public String messageResponse;
 
     public ResponseMessageParser(HttpEntity httpEntity) {
@@ -38,14 +38,13 @@ public class ResponseMessageParser {
         return httpEntity;
     }
 
-    public Boolean isValid() {
+    public boolean isValid() {
         return this.isValid;
     }
 
     public String getMessageResponse() {
         return this.messageResponse;
     }
-
 
     public String parseXMLMessage() {
         String message = null;
@@ -54,8 +53,10 @@ public class ResponseMessageParser {
         try {
             builder = dbFactory.newDocumentBuilder();
             Document doc = null;
-            try {
-                String httpEntityString = EntityUtils.toString(httpEntity);
+
+            String httpEntityString = EntityUtils.toString(httpEntity);
+
+            if (httpEntityString.contains("OpenRosaResponse")) {
                 doc = builder.parse(new ByteArrayInputStream(httpEntityString.getBytes()));
                 doc.getDocumentElement().normalize();
 
@@ -64,15 +65,13 @@ public class ResponseMessageParser {
                 } else {
                     isValid = false;
                 }
-                return message;
-
-            } catch (SAXException | IOException e) {
-                Timber.e(e, "Error parsing XML message due to %s ", e.getMessage());
-                isValid = false;
             }
 
             return message;
 
+        } catch (SAXException | IOException e) {
+            Timber.e(e, "Error parsing XML message due to %s ", e.getMessage());
+            isValid = false;
         } catch (ParserConfigurationException e) {
             Timber.e(e, "Error parsing XML message due to %s ", e.getMessage());
             isValid = false;
@@ -80,4 +79,6 @@ public class ResponseMessageParser {
 
         return message;
     }
+
+
 }

@@ -14,11 +14,14 @@
 
 package org.odk.collect.android.widgets;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.text.InputFilter;
 import android.text.InputType;
+import android.text.Selection;
 import android.text.method.DigitsKeyListener;
 import android.util.TypedValue;
+import android.widget.EditText;
 
 import org.javarosa.core.model.data.DecimalData;
 import org.javarosa.core.model.data.IAnswerData;
@@ -32,55 +35,43 @@ import java.util.Locale;
  *
  * @author Carl Hartung (carlhartung@gmail.com)
  */
+@SuppressLint("ViewConstructor")
 public class DecimalWidget extends StringWidget {
-
-    private Double getDoubleAnswerValue() {
-        IAnswerData dataHolder = mPrompt.getAnswerValue();
-        Double d = null;
-        if (dataHolder != null) {
-            Object dataValue = dataHolder.getValue();
-            if (dataValue != null) {
-                if (dataValue instanceof Integer) {
-                    d = Double.valueOf(((Integer) dataValue).intValue());
-                } else {
-                    d = (Double) dataValue;
-                }
-            }
-        }
-        return d;
-    }
 
     public DecimalWidget(Context context, FormEntryPrompt prompt, boolean readOnlyOverride) {
         super(context, prompt, readOnlyOverride, true);
 
         // formatting
-        mAnswer.setTextSize(TypedValue.COMPLEX_UNIT_DIP, mAnswerFontsize);
-        mAnswer.setInputType(InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        EditText answerText = getAnswerTextField();
+
+        answerText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, answerFontsize);
+        answerText.setInputType(InputType.TYPE_NUMBER_FLAG_DECIMAL);
 
         // needed to make long readonly text scroll
-        mAnswer.setHorizontallyScrolling(false);
-        mAnswer.setSingleLine(false);
+        answerText.setHorizontallyScrolling(false);
+        answerText.setSingleLine(false);
 
         // only numbers are allowed
-        mAnswer.setKeyListener(new DigitsKeyListener(true, true));
+        answerText.setKeyListener(new DigitsKeyListener(true, true));
 
         // only 15 characters allowed
         InputFilter[] fa = new InputFilter[1];
         fa[0] = new InputFilter.LengthFilter(15);
-        mAnswer.setFilters(fa);
+        answerText.setFilters(fa);
 
         Double d = getDoubleAnswerValue();
 
-        NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);
-        nf.setMaximumFractionDigits(15);
-        nf.setMaximumIntegerDigits(15);
-        nf.setGroupingUsed(false);
         if (d != null) {
-            // truncate to 15 digits max...
-            String string = nf.format(d);
-            d = Double.parseDouble(string.replace(',', '.'));
-            //mAnswer.setText(d.toString());
-            mAnswer.setText(String.format(Locale.ENGLISH, "%f", d));
+            // truncate to 15 digits max in US locale
+            NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);
+            nf.setMaximumFractionDigits(15);
+            nf.setMaximumIntegerDigits(15);
+            nf.setGroupingUsed(false);
+
+            String formattedValue = nf.format(d);
+            answerText.setText(formattedValue);
+
+            Selection.setSelection(answerText.getText(), answerText.getText().length());
         }
 
         // disable if read only
@@ -93,16 +84,33 @@ public class DecimalWidget extends StringWidget {
         setupChangeListener();
     }
 
+    private Double getDoubleAnswerValue() {
+        IAnswerData dataHolder = formEntryPrompt.getAnswerValue();
+        Double d = null;
+        if (dataHolder != null) {
+            Object dataValue = dataHolder.getValue();
+            if (dataValue != null) {
+                if (dataValue instanceof Integer) {
+                    d = (double) (Integer) dataValue;
+                } else {
+                    d = (Double) dataValue;
+                }
+            }
+        }
+        return d;
+    }
 
     @Override
     public IAnswerData getAnswer() {
         clearFocus();
-        String s = mAnswer.getText().toString();
-        if (s == null || s.equals("")) {
+        String s = getAnswerTextField().getText().toString();
+        if (s.isEmpty()) {
             return null;
+
         } else {
             try {
-                return new DecimalData(Double.valueOf(s).doubleValue());
+                return new DecimalData(Double.parseDouble(s));
+
             } catch (Exception numberFormatException) {
                 return null;
             }

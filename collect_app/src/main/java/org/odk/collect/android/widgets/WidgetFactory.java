@@ -38,7 +38,7 @@ public class WidgetFactory {
      * @param readOnlyOverride a flag to be ORed with JR readonly attribute.
      */
     public static QuestionWidget createWidgetFromPrompt(FormEntryPrompt fep, Context context,
-            boolean readOnlyOverride) {
+                                                        boolean readOnlyOverride) {
 
         // get appearance hint and clean it up so it is lower case and never null...
         String appearance = fep.getAppearanceHint();
@@ -48,7 +48,7 @@ public class WidgetFactory {
         // for now, all appearance tags are in english...
         appearance = appearance.toLowerCase(Locale.ENGLISH);
 
-        QuestionWidget questionWidget;
+        QuestionWidget questionWidget = new StringWidget(context, fep, readOnlyOverride);
         switch (fep.getControlType()) {
             case Constants.CONTROL_INPUT:
                 switch (fep.getDataType()) {
@@ -111,8 +111,8 @@ public class WidgetFactory {
                             questionWidget = new StringWidget(context, fep, readOnlyOverride);
                         }
                         break;
-                    default:
-                        questionWidget = new StringWidget(context, fep, readOnlyOverride);
+                    case Constants.DATATYPE_BOOLEAN:
+                        questionWidget = new BooleanWidget(context, fep);
                         break;
                 }
                 break;
@@ -127,8 +127,10 @@ public class WidgetFactory {
                     questionWidget = new DrawWidget(context, fep);
                 } else if (appearance.startsWith("align:")) {
                     questionWidget = new AlignedImageWidget(context, fep);
+                } else if (appearance.equals("selfie")) {
+                    questionWidget = new ImageWidget(context, fep, true);
                 } else {
-                    questionWidget = new ImageWidget(context, fep);
+                    questionWidget = new ImageWidget(context, fep, false);
                 }
                 break;
             case Constants.CONTROL_OSM_CAPTURE:
@@ -147,7 +149,7 @@ public class WidgetFactory {
                     int numColumns = -1;
                     try {
                         String firstWord = appearance.split("\\s+")[0];
-                        int idx = firstWord.indexOf("-");
+                        int idx = firstWord.indexOf('-');
                         if (idx != -1) {
                             numColumns =
                                     Integer.parseInt(firstWord.substring(idx + 1));
@@ -185,7 +187,7 @@ public class WidgetFactory {
                     int numColumns = -1;
                     try {
                         String firstWord = appearance.split("\\s+")[0];
-                        int idx = firstWord.indexOf("-");
+                        int idx = firstWord.indexOf('-');
                         if (idx != -1) {
                             numColumns =
                                     Integer.parseInt(firstWord.substring(idx + 1));
@@ -204,6 +206,8 @@ public class WidgetFactory {
                     questionWidget = new ListMultiWidget(context, fep, true);
                 } else if (appearance.startsWith("label")) {
                     questionWidget = new LabelWidget(context, fep);
+                } else if (appearance.contains("autocomplete")) {
+                    questionWidget = new SelectMultipleAutocompleteWidget(context, fep);
                 } else {
                     questionWidget = new SelectMultiWidget(context, fep);
                 }
@@ -211,11 +215,17 @@ public class WidgetFactory {
             case Constants.CONTROL_TRIGGER:
                 questionWidget = new TriggerWidget(context, fep);
                 break;
-            default:
-                questionWidget = new StringWidget(context, fep, readOnlyOverride);
+            case Constants.CONTROL_RANGE:
+                switch (fep.getDataType()) {
+                    case Constants.DATATYPE_INTEGER:
+                        questionWidget = new RangeIntegerWidget(context, fep);
+                        break;
+                    case Constants.DATATYPE_DECIMAL:
+                        questionWidget = new RangeDecimalWidget(context, fep);
+                        break;
+                }
                 break;
         }
         return questionWidget;
     }
-
 }

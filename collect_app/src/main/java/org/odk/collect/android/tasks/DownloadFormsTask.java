@@ -30,6 +30,7 @@ import org.odk.collect.android.logic.FormDetails;
 import org.odk.collect.android.provider.FormsProviderAPI.FormsColumns;
 import org.odk.collect.android.utilities.DocumentFetchResult;
 import org.odk.collect.android.utilities.FileUtils;
+import org.odk.collect.android.utilities.UrlUtils;
 import org.odk.collect.android.utilities.WebUtils;
 import org.opendatakit.httpclientandroidlib.Header;
 import org.opendatakit.httpclientandroidlib.HttpEntity;
@@ -70,9 +71,9 @@ public class DownloadFormsTask extends
     private static final String MD5_COLON_PREFIX = "md5:";
     private static final String TEMP_DOWNLOAD_EXTENSION = ".tempDownload";
 
-    private FormDownloaderListener mStateListener;
+    private FormDownloaderListener stateListener;
 
-    private FormsDao mFormsDao;
+    private FormsDao formsDao;
 
     private static final String NAMESPACE_OPENROSA_ORG_XFORMS_XFORMS_MANIFEST =
             "http://openrosa.org/xforms/xformsManifest";
@@ -86,7 +87,7 @@ public class DownloadFormsTask extends
     protected HashMap<FormDetails, String> doInBackground(ArrayList<FormDetails>... values) {
         ArrayList<FormDetails> toDownload = values[0];
 
-        mFormsDao = new FormsDao();
+        formsDao = new FormsDao();
         int total = toDownload.size();
         int count = 1;
         Collect.getInstance().getActivityLogger().logAction(this, "downloadForms",
@@ -95,8 +96,7 @@ public class DownloadFormsTask extends
         HashMap<FormDetails, String> result = new HashMap<FormDetails, String>();
 
         for (FormDetails fd : toDownload) {
-            publishProgress(fd.formName, Integer.valueOf(count).toString(), Integer.valueOf(total)
-                    .toString());
+            publishProgress(fd.formName, String.valueOf(count), String.valueOf(total));
 
             String message = "";
 
@@ -127,8 +127,7 @@ public class DownloadFormsTask extends
                     Timber.i("No Manifest for: %s", fd.formName);
                 }
             } catch (TaskCancelledException e) {
-                Timber.e(e);
-
+                Timber.i(e);
                 cleanUp(fileResult, e.getFile(), tempMediaPath);
 
                 // do not download additional forms.
@@ -149,6 +148,12 @@ public class DownloadFormsTask extends
                 message += msg;
             }
 
+            try {
+                checkForBadSubmissionUrl(fileResult);
+            } catch (IllegalArgumentException e) {
+                message += e.getMessage();
+            }
+
             if (!isCancelled() && message.length() == 0 && fileResult != null) {
                 // install everything
                 UriResult uriResult = null;
@@ -159,7 +164,6 @@ public class DownloadFormsTask extends
                     // move the media files in the media folder
                     if (tempMediaPath != null) {
                         File formMediaPath = new File(uriResult.getMediaPath());
-
                         FileUtils.moveMediaFiles(tempMediaPath, formMediaPath);
                     }
                 } catch (IOException e) {
@@ -176,8 +180,7 @@ public class DownloadFormsTask extends
 
                     cleanUp(fileResult, null, tempMediaPath);
                 } catch (TaskCancelledException e) {
-                    Timber.e(e);
-
+                    Timber.i(e);
                     cleanUp(fileResult, e.getFile(), tempMediaPath);
                 }
             } else {
@@ -189,6 +192,25 @@ public class DownloadFormsTask extends
         }
 
         return result;
+    }
+
+    private void checkForBadSubmissionUrl(FileResult fileResult) throws IllegalArgumentException {
+        if (fileResult != null) {
+            File form = fileResult.getFile();
+            HashMap<String, String> fields;
+            try {
+                fields = FileUtils.parseXML(form);
+            } catch (RuntimeException e) {
+                throw new IllegalArgumentException(form.getName() + " :: " + e.toString());
+            }
+
+            String submission = fields.get(FileUtils.SUBMISSIONURI);
+            if (submission != null && !UrlUtils.isValidUrl(submission)) {
+                throw new IllegalArgumentException(
+                        Collect.getInstance().getString(R.string.xform_parse_error,
+                                form.getName(), "submission url"));
+            }
+        }
     }
 
     private void saveResult(HashMap<FormDetails, String> result, FormDetails fd, String message) {
@@ -204,7 +226,7 @@ public class DownloadFormsTask extends
     private void cleanUp(FileResult fileResult, File fileOnCancel, String tempMediaPath) {
         if (fileResult == null) {
             Timber.w("The user cancelled (or an exception happened) the download of a form at the "
-                            + "very beginning.");
+                    + "very beginning.");
         } else {
             if (fileResult.getFile() != null) {
                 FileUtils.deleteAndReport(fileResult.getFile());
@@ -238,7 +260,7 @@ public class DownloadFormsTask extends
         FileUtils.checkMediaPath(new File(mediaPath));
 
         try {
-            cursor = mFormsDao.getFormsCursorForFormFilePath(formFile.getAbsolutePath());
+            cursor = formsDao.getFormsCursorForFormFilePath(formFile.getAbsolutePath());
 
             isNew = cursor.getCount() <= 0;
 
@@ -264,7 +286,7 @@ public class DownloadFormsTask extends
                 v.put(FormsColumns.SUBMISSION_URI, formInfo.get(FileUtils.SUBMISSIONURI));
                 v.put(FormsColumns.BASE64_RSA_PUBLIC_KEY,
                         formInfo.get(FileUtils.BASE64_RSA_PUBLIC_KEY));
-                uri = mFormsDao.saveForm(v);
+                uri = formsDao.saveForm(v);
                 Collect.getInstance().getActivityLogger().logAction(this, "insert",
                         formFile.getAbsolutePath());
 
@@ -314,7 +336,7 @@ public class DownloadFormsTask extends
         // make sure it's not the same as a file we already have
         Cursor c = null;
         try {
-            c = mFormsDao.getFormsCursorForMd5Hash(FileUtils.getMd5Hash(f));
+            c = formsDao.getFormsCursorForMd5Hash(FileUtils.getMd5Hash(f));
             if (c.getCount() > 0) {
                 // Should be at most, 1
                 c.moveToFirst();
@@ -323,7 +345,7 @@ public class DownloadFormsTask extends
 
                 // delete the file we just downloaded, because it's a duplicate
                 Timber.w("A duplicate file has been found, we need to remove the downloaded file "
-                                + "and return the other one.");
+                        + "and return the other one.");
                 FileUtils.deleteAndReport(f);
 
                 // set the file returned to the file we already had
@@ -344,7 +366,7 @@ public class DownloadFormsTask extends
     /**
      * Common routine to download a document from the downloadUrl and save the contents in the file
      * 'file'. Shared by media file download and form file download.
-     *
+     * <p>
      * SurveyCTO: The file is saved into a temp folder and is moved to the final place if everything
      * is okay,
      * so that garbage is not left over on cancel.
@@ -555,7 +577,7 @@ public class DownloadFormsTask extends
         }
 
         publishProgress(Collect.getInstance().getString(R.string.fetching_manifest, fd.formName),
-                Integer.valueOf(count).toString(), Integer.valueOf(total).toString());
+                String.valueOf(count), String.valueOf(total));
 
         List<MediaFile> files = new ArrayList<MediaFile>();
         // get shared HttpContext so that authentication and cookies are retained.
@@ -669,9 +691,8 @@ public class DownloadFormsTask extends
                 publishProgress(
                         Collect.getInstance().getString(R.string.form_download_progress,
                                 fd.formName,
-                                String.valueOf(mediaCount), String.valueOf(files.size())), String.valueOf(count),
-                        Integer
-                                .valueOf(total).toString());
+                                String.valueOf(mediaCount), String.valueOf(files.size())),
+                                String.valueOf(count),String.valueOf(total));
                 //try {
                 File finalMediaFile = new File(finalMediaDir, toDownload.filename);
                 File tempMediaFile = new File(tempMediaDir, toDownload.filename);
@@ -702,34 +723,31 @@ public class DownloadFormsTask extends
         return null;
     }
 
-
     @Override
     protected void onPostExecute(HashMap<FormDetails, String> value) {
         synchronized (this) {
-            if (mStateListener != null) {
-                mStateListener.formsDownloadingComplete(value);
+            if (stateListener != null) {
+                stateListener.formsDownloadingComplete(value);
             }
         }
     }
-
 
     @Override
     protected void onProgressUpdate(String... values) {
         synchronized (this) {
-            if (mStateListener != null) {
+            if (stateListener != null) {
                 // update progress and total
-                mStateListener.progressUpdate(values[0],
-                        Integer.valueOf(values[1]),
-                        Integer.valueOf(values[2]));
+                stateListener.progressUpdate(values[0],
+                        Integer.parseInt(values[1]),
+                        Integer.parseInt(values[2]));
             }
         }
 
     }
 
-
     public void setDownloaderListener(FormDownloaderListener sl) {
         synchronized (this) {
-            mStateListener = sl;
+            stateListener = sl;
         }
     }
 

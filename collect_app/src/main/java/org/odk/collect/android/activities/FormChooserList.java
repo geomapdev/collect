@@ -23,7 +23,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.View;
-import android.widget.ListView;
+import android.widget.AdapterView;
 import android.widget.TextView;
 
 import org.odk.collect.android.R;
@@ -44,19 +44,16 @@ import timber.log.Timber;
  * @author Yaw Anokwa (yanokwa@gmail.com)
  * @author Carl Hartung (carlhartung@gmail.com)
  */
-public class FormChooserList extends FormListActivity implements DiskSyncListener {
+public class FormChooserList extends FormListActivity implements DiskSyncListener, AdapterView.OnItemClickListener {
     private static final String FORM_CHOOSER_LIST_SORTING_ORDER = "formChooserListSortingOrder";
 
     private static final boolean EXIT = true;
     private static final String syncMsgKey = "syncmsgkey";
 
-    private DiskSyncTask mDiskSyncTask;
-
-    private AlertDialog mAlertDialog;
+    private DiskSyncTask diskSyncTask;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
 
         // must be at the beginning of any activity that can be called from an external intent
         try {
@@ -67,6 +64,8 @@ public class FormChooserList extends FormListActivity implements DiskSyncListene
         }
 
         setContentView(R.layout.chooser_list_layout);
+        super.onCreate(savedInstanceState);
+
         setTitle(getString(R.string.enter_data));
 
         setupAdapter();
@@ -78,14 +77,14 @@ public class FormChooserList extends FormListActivity implements DiskSyncListene
 
         // DiskSyncTask checks the disk for any forms not already in the content provider
         // that is, put here by dragging and dropping onto the SDCard
-        mDiskSyncTask = (DiskSyncTask) getLastNonConfigurationInstance();
-        if (mDiskSyncTask == null) {
+        diskSyncTask = (DiskSyncTask) getLastCustomNonConfigurationInstance();
+        if (diskSyncTask == null) {
             Timber.i("Starting new disk sync task");
-            mDiskSyncTask = new DiskSyncTask();
-            mDiskSyncTask.setDiskSyncListener(this);
-            mDiskSyncTask.execute((Void[]) null);
+            diskSyncTask = new DiskSyncTask();
+            diskSyncTask.setDiskSyncListener(this);
+            diskSyncTask.execute((Void[]) null);
         }
-        mSortingOptions = new String[]{
+        sortingOptions = new String[]{
                 getString(R.string.sort_by_name_asc), getString(R.string.sort_by_name_desc),
                 getString(R.string.sort_by_date_asc), getString(R.string.sort_by_date_desc),
         };
@@ -93,9 +92,9 @@ public class FormChooserList extends FormListActivity implements DiskSyncListene
 
 
     @Override
-    public Object onRetainNonConfigurationInstance() {
+    public Object onRetainCustomNonConfigurationInstance() {
         // pass the thread on restart
-        return mDiskSyncTask;
+        return diskSyncTask;
     }
 
 
@@ -111,9 +110,9 @@ public class FormChooserList extends FormListActivity implements DiskSyncListene
      * Stores the path of selected form and finishes.
      */
     @Override
-    protected void onListItemClick(ListView listView, View view, int position, long id) {
+    public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
         // get uri to form
-        long idFormsTable = getListAdapter().getItemId(position);
+        long idFormsTable = listView.getAdapter().getItemId(position);
         Uri formUri = ContentUris.withAppendedId(FormsColumns.CONTENT_URI, idFormsTable);
 
         Collect.getInstance().getActivityLogger().logAction(this, "onListItemClick",
@@ -136,18 +135,18 @@ public class FormChooserList extends FormListActivity implements DiskSyncListene
 
     @Override
     protected void onResume() {
-        mDiskSyncTask.setDiskSyncListener(this);
+        diskSyncTask.setDiskSyncListener(this);
         super.onResume();
 
-        if (mDiskSyncTask.getStatus() == AsyncTask.Status.FINISHED) {
-            syncComplete(mDiskSyncTask.getStatusMessage());
+        if (diskSyncTask.getStatus() == AsyncTask.Status.FINISHED) {
+            syncComplete(diskSyncTask.getStatusMessage());
         }
     }
 
 
     @Override
     protected void onPause() {
-        mDiskSyncTask.setDiskSyncListener(null);
+        diskSyncTask.setDiskSyncListener(null);
         super.onPause();
     }
 
@@ -184,10 +183,10 @@ public class FormChooserList extends FormListActivity implements DiskSyncListene
                 R.id.text1, R.id.text2, R.id.text3
         };
 
-        mListAdapter =
+        listAdapter =
                 new VersionHidingCursorAdapter(FormsColumns.JR_VERSION, this, R.layout.two_item, getCursor(), data, view);
 
-        setListAdapter(mListAdapter);
+        listView.setAdapter(listAdapter);
     }
 
     @Override
@@ -197,7 +196,7 @@ public class FormChooserList extends FormListActivity implements DiskSyncListene
 
     @Override
     protected void updateAdapter() {
-        mListAdapter.changeCursor(getCursor());
+        listAdapter.changeCursor(getCursor());
     }
 
     private Cursor getCursor() {
@@ -212,9 +211,9 @@ public class FormChooserList extends FormListActivity implements DiskSyncListene
 
         Collect.getInstance().getActivityLogger().logAction(this, "createErrorDialog", "show");
 
-        mAlertDialog = new AlertDialog.Builder(this).create();
-        mAlertDialog.setIcon(android.R.drawable.ic_dialog_info);
-        mAlertDialog.setMessage(errorMsg);
+        AlertDialog alertDialog = new AlertDialog.Builder(this).create();
+        alertDialog.setIcon(android.R.drawable.ic_dialog_info);
+        alertDialog.setMessage(errorMsg);
         DialogInterface.OnClickListener errorListener = new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int i) {
@@ -230,9 +229,8 @@ public class FormChooserList extends FormListActivity implements DiskSyncListene
                 }
             }
         };
-        mAlertDialog.setCancelable(false);
-        mAlertDialog.setButton(getString(R.string.ok), errorListener);
-        mAlertDialog.show();
+        alertDialog.setCancelable(false);
+        alertDialog.setButton(getString(R.string.ok), errorListener);
+        alertDialog.show();
     }
-
 }

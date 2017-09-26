@@ -20,6 +20,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.text.InputFilter;
 import android.text.InputType;
+import android.text.Selection;
 import android.text.method.DigitsKeyListener;
 
 import org.javarosa.core.model.data.DecimalData;
@@ -36,21 +37,50 @@ import java.util.Locale;
 /**
  * Launch an external app to supply a decimal value. If the app
  * does not launch, enable the text area for regular data entry.
- *
+ * <p>
  * See {@link org.odk.collect.android.widgets.ExStringWidget} for usage.
  *
  * @author mitchellsundt@gmail.com
  */
 public class ExDecimalWidget extends ExStringWidget {
 
+    public ExDecimalWidget(Context context, FormEntryPrompt prompt) {
+        super(context, prompt);
+
+        answer.setInputType(InputType.TYPE_NUMBER_FLAG_DECIMAL);
+
+        // only allows numbers and no periods
+        answer.setKeyListener(new DigitsKeyListener(true, true));
+
+        // only 15 characters allowed
+        InputFilter[] fa = new InputFilter[1];
+        fa[0] = new InputFilter.LengthFilter(15);
+        answer.setFilters(fa);
+
+        Double d = getDoubleAnswerValue();
+
+        if (d != null) {
+            // truncate to 15 digits max in US locale
+            NumberFormat nf = NumberFormat.getNumberInstance(Locale.US);
+            nf.setMaximumFractionDigits(15);
+            nf.setMaximumIntegerDigits(15);
+            nf.setGroupingUsed(false);
+
+            String formattedValue = nf.format(d);
+            answer.setText(formattedValue);
+
+            Selection.setSelection(answer.getText(), answer.getText().length());
+        }
+    }
+
     private Double getDoubleAnswerValue() {
-        IAnswerData dataHolder = mPrompt.getAnswerValue();
+        IAnswerData dataHolder = formEntryPrompt.getAnswerValue();
         Double d = null;
         if (dataHolder != null) {
             Object dataValue = dataHolder.getValue();
             if (dataValue != null) {
                 if (dataValue instanceof Integer) {
-                    d = Double.valueOf(((Integer) dataValue).intValue());
+                    d = (double) (Integer) dataValue;
                 } else {
                     d = (Double) dataValue;
                 }
@@ -59,41 +89,11 @@ public class ExDecimalWidget extends ExStringWidget {
         return d;
     }
 
-    public ExDecimalWidget(Context context, FormEntryPrompt prompt) {
-        super(context, prompt);
-
-        mAnswer.setInputType(InputType.TYPE_NUMBER_FLAG_DECIMAL);
-
-        // only allows numbers and no periods
-        mAnswer.setKeyListener(new DigitsKeyListener(true, true));
-
-        // only 15 characters allowed
-        InputFilter[] fa = new InputFilter[1];
-        fa[0] = new InputFilter.LengthFilter(15);
-        mAnswer.setFilters(fa);
-
-        Double d = getDoubleAnswerValue();
-
-        // apparently an attempt at rounding to no more than 15 digit precision???
-        NumberFormat nf = NumberFormat.getNumberInstance();
-        nf.setMaximumFractionDigits(15);
-        nf.setMaximumIntegerDigits(15);
-        nf.setGroupingUsed(false);
-        if (d != null) {
-            // truncate to 15 digits max...
-            String string = nf.format(d);
-            d = Double.parseDouble(string.replace(',', '.')); // in case , is decimal pt
-            //mAnswer.setText(d.toString());
-            mAnswer.setText(String.format(Locale.ENGLISH, "%f", d));
-        }
-    }
-
-
     @Override
     protected void fireActivity(Intent i) throws ActivityNotFoundException {
         i.putExtra("value", getDoubleAnswerValue());
         Collect.getInstance().getActivityLogger().logInstanceAction(this, "launchIntent",
-                i.getAction(), mPrompt.getIndex());
+                i.getAction(), formEntryPrompt.getIndex());
         ((Activity) getContext()).startActivityForResult(i,
                 FormEntryActivity.EX_DECIMAL_CAPTURE);
     }
@@ -101,7 +101,7 @@ public class ExDecimalWidget extends ExStringWidget {
 
     @Override
     public IAnswerData getAnswer() {
-        String s = mAnswer.getText().toString();
+        String s = answer.getText().toString();
         if (s == null || s.equals("")) {
             return null;
         } else {
@@ -120,7 +120,7 @@ public class ExDecimalWidget extends ExStringWidget {
     @Override
     public void setBinaryData(Object answer) {
         DecimalData decimalData = ExternalAppsUtils.asDecimalData(answer);
-        mAnswer.setText(decimalData == null ? null : decimalData.getValue().toString());
+        this.answer.setText(decimalData == null ? null : decimalData.getValue().toString());
         Collect.getInstance().getFormController().setIndexWaitingForData(null);
     }
 

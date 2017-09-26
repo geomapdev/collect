@@ -18,12 +18,10 @@ import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.util.TypedValue;
 import android.view.KeyEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
-import android.widget.TableLayout;
 import android.widget.Toast;
 
 import org.javarosa.core.model.data.IAnswerData;
@@ -34,31 +32,31 @@ import org.odk.collect.android.application.Collect;
 
 /**
  * <p>Use the ODK Sensors framework to print data to a connected printer.</p>
- *
+ * <p>
  * <p>The default button text is "Print Label"
- *
+ * <p>
  * <p>You may override the button text and the error text that is
  * displayed when the app is missing by using jr:itext() values. The
  * special itext form values are 'buttonText' and 'noPrinterErrorString',
  * respectively.</p>
- *
+ * <p>
  * <p>To use via XLSForm, specify a 'note' type with a 'calculation' that defines
  * the data to be printed and with an 'appearance' as described below.
- *
+ * <p>
  * <p>Within the XForms XML, to use this widget, define an appearance on the
  * &lt;input/&gt; tag that begins "printer:" and then contains the intent
  * action to launch. That intent starts the printer app. The data to print
  * is sent via a broadcast intent to intentname.data The printer then pops
  * a UI to initiate the actual printing (or change the destination printer).
  * </p>
- *
+ * <p>
  * <p>Implementation-wise, this widget is an ExStringWidget that is read-only.</p>
- *
+ * <p>
  * <p>The ODK Sensors Zebra printer uses this appearance (intent):</p>
  * <pre>
  * "printer:org.opendatakit.sensors.ZebraPrinter"
  * </pre>
- *
+ * <p>
  * <p>The data that is printed should be defined in the calculate attribute
  * of the bind. The structure of that string is a &lt;br&gt; separated list
  * of values consisting of:</p>
@@ -66,23 +64,23 @@ import org.odk.collect.android.application.Collect;
  * <li>string qrcode to emit (optional)</li>
  * <li>text line 1 (optional)</li>
  * <li>additional text line (repeat as needed)</li></ul>
- *
+ * <p>
  * <p>E.g., if you wanted to emit a barcode of 123, a qrcode of "mycode" and
  * two text lines of "line 1" and "line 2", you would define the calculate
  * as:</p>
- *
+ * <p>
  * <pre>
  *  &lt;bind nodeset="/printerForm/printme" type="string" readonly="true()"
  *     calculate="concat('123','&lt;br&gt;','mycode','&lt;br&gt;','line 1','&lt;br&gt;','line 2')"
  * /&gt;
  * </pre>
- *
+ * <p>
  * <p>Depending upon what you supply, the printer may print just a
  * barcode, just a qrcode, just text, or some combination of all 3.</p>
- *
+ * <p>
  * <p>Despite using &lt;br&gt; as a separator, the supplied Zebra
  * printer does not recognize html.</p>
- *
+ * <p>
  * <pre>
  * &lt;input appearance="ex:change.uw.android.TEXTANSWER" ref="/printerForm/printme" &gt;
  * </pre>
@@ -115,15 +113,12 @@ import org.odk.collect.android.application.Collect;
  *
  * @author mitchellsundt@gmail.com
  */
-public class ExPrinterWidget extends QuestionWidget implements IBinaryWidget {
+public class ExPrinterWidget extends QuestionWidget implements BinaryWidget {
 
-    private Button mLaunchIntentButton;
+    private Button launchIntentButton;
 
     public ExPrinterWidget(Context context, FormEntryPrompt prompt) {
         super(context, prompt);
-
-        TableLayout.LayoutParams params = new TableLayout.LayoutParams();
-        params.setMargins(7, 5, 7, 5);
 
         String appearance = prompt.getAppearanceHint();
         String[] attrs = appearance.split(":");
@@ -131,25 +126,18 @@ public class ExPrinterWidget extends QuestionWidget implements IBinaryWidget {
                 ? "org.opendatakit.sensors.ZebraPrinter" : attrs[1];
         final String buttonText;
         final String errorString;
-        String v = mPrompt.getSpecialFormQuestionText("buttonText");
+        String v = formEntryPrompt.getSpecialFormQuestionText("buttonText");
         buttonText = (v != null) ? v : context.getString(R.string.launch_printer);
-        v = mPrompt.getSpecialFormQuestionText("noPrinterErrorString");
+        v = formEntryPrompt.getSpecialFormQuestionText("noPrinterErrorString");
         errorString = (v != null) ? v : context.getString(R.string.no_printer);
 
-        // set button formatting
-        mLaunchIntentButton = new Button(getContext());
-        mLaunchIntentButton.setId(QuestionWidget.newUniqueId());
-        mLaunchIntentButton.setText(buttonText);
-        mLaunchIntentButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP, mAnswerFontsize);
-        mLaunchIntentButton.setPadding(20, 20, 20, 20);
-        mLaunchIntentButton.setLayoutParams(params);
-
-        mLaunchIntentButton.setOnClickListener(new View.OnClickListener() {
+        launchIntentButton = getSimpleButton(buttonText);
+        launchIntentButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 try {
                     Collect.getInstance().getFormController().setIndexWaitingForData(
-                            mPrompt.getIndex());
+                            formEntryPrompt.getIndex());
                     firePrintingActivity(intentName);
                 } catch (ActivityNotFoundException e) {
                     Collect.getInstance().getFormController().setIndexWaitingForData(null);
@@ -160,19 +148,23 @@ public class ExPrinterWidget extends QuestionWidget implements IBinaryWidget {
             }
         });
 
+        if (prompt.isReadOnly()) {
+            launchIntentButton.setEnabled(false);
+        }
+
         // finish complex layout
         LinearLayout printLayout = new LinearLayout(getContext());
         printLayout.setOrientation(LinearLayout.VERTICAL);
-        printLayout.addView(mLaunchIntentButton);
+        printLayout.addView(launchIntentButton);
         addAnswerView(printLayout);
     }
 
     protected void firePrintingActivity(String intentName) throws ActivityNotFoundException {
 
-        String s = mPrompt.getAnswerText();
+        String s = formEntryPrompt.getAnswerText();
 
         Collect.getInstance().getActivityLogger().logInstanceAction(this, "launchPrinter",
-                intentName, mPrompt.getIndex());
+                intentName, formEntryPrompt.getIndex());
         Intent i = new Intent(intentName);
         getContext().startActivity(i);
 
@@ -222,7 +214,7 @@ public class ExPrinterWidget extends QuestionWidget implements IBinaryWidget {
 
     @Override
     public IAnswerData getAnswer() {
-        return mPrompt.getAnswerValue();
+        return formEntryPrompt.getAnswerValue();
     }
 
 
@@ -237,13 +229,13 @@ public class ExPrinterWidget extends QuestionWidget implements IBinaryWidget {
     @Override
     public void setFocus(Context context) {
         // focus on launch button
-        mLaunchIntentButton.requestFocus();
+        launchIntentButton.requestFocus();
     }
 
 
     @Override
     public boolean isWaitingForBinaryData() {
-        return mPrompt.getIndex().equals(
+        return formEntryPrompt.getIndex().equals(
                 Collect.getInstance().getFormController().getIndexWaitingForData());
     }
 
@@ -259,13 +251,13 @@ public class ExPrinterWidget extends QuestionWidget implements IBinaryWidget {
 
     @Override
     public void setOnLongClickListener(OnLongClickListener l) {
-        mLaunchIntentButton.setOnLongClickListener(l);
+        launchIntentButton.setOnLongClickListener(l);
     }
 
     @Override
     public void cancelLongPress() {
         super.cancelLongPress();
-        mLaunchIntentButton.cancelLongPress();
+        launchIntentButton.cancelLongPress();
     }
 
 

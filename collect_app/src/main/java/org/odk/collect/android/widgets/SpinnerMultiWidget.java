@@ -14,11 +14,11 @@
 
 package org.odk.collect.android.widgets;
 
+import android.annotation.SuppressLint;
 import android.app.AlertDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.text.TextUtils;
-import android.util.TypedValue;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
@@ -48,12 +48,13 @@ import java.util.List;
  *
  * @author Jeff Beorse (jeff@beorse.net)
  */
-public class SpinnerMultiWidget extends QuestionWidget {
+@SuppressLint("ViewConstructor")
+public class SpinnerMultiWidget extends QuestionWidget implements MultiChoiceWidget {
 
-    List<SelectChoice> mItems;
+    List<SelectChoice> items;
 
     // The possible select answers
-    CharSequence[] answer_items;
+    CharSequence[] answerItems;
 
     // The button to push to display the answers to choose from
     Button button;
@@ -62,11 +63,10 @@ public class SpinnerMultiWidget extends QuestionWidget {
     boolean[] selections;
 
     // The alert box that contains the answer selection view
-    AlertDialog.Builder alert_builder;
+    AlertDialog.Builder alertBuilder;
 
     // Displays the current selections below the button
     TextView selectionText;
-
 
     @SuppressWarnings("unchecked")
     public SpinnerMultiWidget(final Context context, FormEntryPrompt prompt) {
@@ -76,45 +76,36 @@ public class SpinnerMultiWidget extends QuestionWidget {
         XPathFuncExpr xpathFuncExpr = ExternalDataUtil.getSearchXPathExpression(
                 prompt.getAppearanceHint());
         if (xpathFuncExpr != null) {
-            mItems = ExternalDataUtil.populateExternalChoices(prompt, xpathFuncExpr);
+            items = ExternalDataUtil.populateExternalChoices(prompt, xpathFuncExpr);
         } else {
-            mItems = prompt.getSelectChoices();
+            items = prompt.getSelectChoices();
         }
 
-        mPrompt = prompt;
+        formEntryPrompt = prompt;
 
-        selections = new boolean[mItems.size()];
-        answer_items = new CharSequence[mItems.size()];
-        alert_builder = new AlertDialog.Builder(context);
-        button = new Button(context);
-        selectionText = new TextView(getContext());
+        selections = new boolean[items.size()];
+        answerItems = new CharSequence[items.size()];
+        alertBuilder = new AlertDialog.Builder(context);
+        button = getSimpleButton(context.getString(R.string.select_answer));
 
         // Build View
-        for (int i = 0; i < mItems.size(); i++) {
-            answer_items[i] = prompt.getSelectChoiceText(mItems.get(i));
+        for (int i = 0; i < items.size(); i++) {
+            answerItems[i] = prompt.getSelectChoiceText(items.get(i));
         }
 
-        selectionText.setText(context.getString(R.string.selected));
-        selectionText.setTextSize(TypedValue.COMPLEX_UNIT_DIP, mQuestionFontsize);
+        selectionText = getAnswerTextView();
         selectionText.setVisibility(View.GONE);
 
-        button.setText(context.getString(R.string.select_answer));
-        button.setTextSize(TypedValue.COMPLEX_UNIT_DIP, mQuestionFontsize);
-        button.setPadding(0, 0, 0, 7);
-
-        // Give the button a click listener. This defines the alert as well. All the
-        // click and selection behavior is defined here.
         button.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-
-                alert_builder.setTitle(mPrompt.getQuestionText()).setPositiveButton(R.string.ok,
+                alertBuilder.setTitle(formEntryPrompt.getQuestionText()).setPositiveButton(R.string.ok,
                         new DialogInterface.OnClickListener() {
                             public void onClick(DialogInterface dialog, int id) {
                                 List<String> selectedValues = new ArrayList<>();
 
                                 for (int i = 0; i < selections.length; i++) {
                                     if (selections[i]) {
-                                        selectedValues.add(answer_items[i].toString());
+                                        selectedValues.add(answerItems[i].toString());
                                     }
                                 }
 
@@ -124,7 +115,7 @@ public class SpinnerMultiWidget extends QuestionWidget {
                             }
                         });
 
-                alert_builder.setMultiChoiceItems(answer_items, selections,
+                alertBuilder.setMultiChoiceItems(answerItems, selections,
                         new DialogInterface.OnMultiChoiceClickListener() {
 
                             @Override
@@ -133,13 +124,17 @@ public class SpinnerMultiWidget extends QuestionWidget {
                                 selections[which] = isChecked;
                             }
                         });
-                AlertDialog alert = alert_builder.create();
+                AlertDialog alert = alertBuilder.create();
                 alert.show();
             }
         });
 
+        if (prompt.isReadOnly()) {
+            button.setEnabled(false);
+        }
+
         // Fill in previous answers
-        List<Selection> ve = new ArrayList<Selection>();
+        List<Selection> ve = new ArrayList<>();
         if (prompt.getAnswerValue() != null) {
             ve = (List<Selection>) prompt.getAnswerValue().getValue();
         }
@@ -148,11 +143,11 @@ public class SpinnerMultiWidget extends QuestionWidget {
             List<String> selectedValues = new ArrayList<>();
 
             for (int i = 0; i < selections.length; i++) {
-                String value = mItems.get(i).getValue();
+                String value = items.get(i).getValue();
                 for (Selection s : ve) {
                     if (value.equals(s.getValue())) {
                         selections[i] = true;
-                        selectedValues.add(answer_items[i].toString());
+                        selectedValues.add(answerItems[i].toString());
                         break;
                     }
                 }
@@ -170,14 +165,13 @@ public class SpinnerMultiWidget extends QuestionWidget {
         addAnswerView(answerLayout);
     }
 
-
     @Override
     public IAnswerData getAnswer() {
         clearFocus();
-        List<Selection> vc = new ArrayList<Selection>();
-        for (int i = 0; i < mItems.size(); i++) {
+        List<Selection> vc = new ArrayList<>();
+        for (int i = 0; i < items.size(); i++) {
             if (selections[i]) {
-                SelectChoice sc = mItems.get(i);
+                SelectChoice sc = items.get(i);
                 vc.add(new Selection(sc));
             }
         }
@@ -189,7 +183,6 @@ public class SpinnerMultiWidget extends QuestionWidget {
 
     }
 
-
     @Override
     public void clearAnswer() {
         selectionText.setText(R.string.selected);
@@ -198,7 +191,6 @@ public class SpinnerMultiWidget extends QuestionWidget {
             selections[i] = false;
         }
     }
-
 
     @Override
     public void setFocus(Context context) {
@@ -209,17 +201,25 @@ public class SpinnerMultiWidget extends QuestionWidget {
 
     }
 
-
     @Override
     public void setOnLongClickListener(OnLongClickListener l) {
         button.setOnLongClickListener(l);
     }
 
-
     @Override
     public void cancelLongPress() {
         super.cancelLongPress();
         button.cancelLongPress();
+    }
+
+    @Override
+    public int getChoiceCount() {
+        return selections.length;
+    }
+
+    @Override
+    public void setChoiceSelected(int choiceIndex, boolean isSelected) {
+        selections[choiceIndex] = isSelected;
     }
 
 }

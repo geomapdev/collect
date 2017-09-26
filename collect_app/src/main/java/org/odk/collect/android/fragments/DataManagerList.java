@@ -15,6 +15,7 @@
 package org.odk.collect.android.fragments;
 
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.database.Cursor;
 import android.os.AsyncTask;
@@ -52,14 +53,14 @@ public class DataManagerList extends InstanceListFragment
         implements DeleteInstancesListener, DiskSyncListener, View.OnClickListener {
     private static final String DATA_MANAGER_LIST_SORTING_ORDER = "dataManagerListSortingOrder";
 
-    DeleteInstancesTask mDeleteInstancesTask = null;
-    private AlertDialog mAlertDialog;
+    DeleteInstancesTask deleteInstancesTask = null;
+    private AlertDialog alertDialog;
     private InstanceSyncTask instanceSyncTask;
+    private ProgressDialog progressDialog;
 
     public static DataManagerList newInstance() {
         return new DataManagerList();
     }
-
 
     @Nullable
     @Override
@@ -71,8 +72,8 @@ public class DataManagerList extends InstanceListFragment
     @Override
     public void onViewCreated(View rootView, Bundle savedInstanceState) {
 
-        mDeleteButton.setOnClickListener(this);
-        mToggleButton.setOnClickListener(this);
+        deleteButton.setOnClickListener(this);
+        toggleButton.setOnClickListener(this);
 
         setupAdapter();
         instanceSyncTask = new InstanceSyncTask();
@@ -91,30 +92,30 @@ public class DataManagerList extends InstanceListFragment
     @Override
     public void onResume() {
         // hook up to receive completion events
-        if (mDeleteInstancesTask != null) {
-            mDeleteInstancesTask.setDeleteListener(this);
+        if (deleteInstancesTask != null) {
+            deleteInstancesTask.setDeleteListener(this);
         }
         if (instanceSyncTask != null) {
             instanceSyncTask.setDiskSyncListener(this);
         }
         super.onResume();
         // async task may have completed while we were reorienting...
-        if (mDeleteInstancesTask != null
-                && mDeleteInstancesTask.getStatus() == AsyncTask.Status.FINISHED) {
-            deleteComplete(mDeleteInstancesTask.getDeleteCount());
+        if (deleteInstancesTask != null
+                && deleteInstancesTask.getStatus() == AsyncTask.Status.FINISHED) {
+            deleteComplete(deleteInstancesTask.getDeleteCount());
         }
     }
 
     @Override
     public void onPause() {
-        if (mDeleteInstancesTask != null) {
-            mDeleteInstancesTask.setDeleteListener(null);
+        if (deleteInstancesTask != null) {
+            deleteInstancesTask.setDeleteListener(null);
         }
         if (instanceSyncTask != null) {
             instanceSyncTask.setDiskSyncListener(null);
         }
-        if (mAlertDialog != null && mAlertDialog.isShowing()) {
-            mAlertDialog.dismiss();
+        if (alertDialog != null && alertDialog.isShowing()) {
+            alertDialog.dismiss();
         }
         super.onPause();
     }
@@ -133,9 +134,9 @@ public class DataManagerList extends InstanceListFragment
         String[] data = new String[]{InstanceColumns.DISPLAY_NAME, InstanceColumns.DISPLAY_SUBTEXT};
         int[] view = new int[]{R.id.text1, R.id.text2};
 
-        mListAdapter = new SimpleCursorAdapter(getActivity(),
+        listAdapter = new SimpleCursorAdapter(getActivity(),
                 R.layout.two_item_multiple_choice, getCursor(), data, view);
-        setListAdapter(mListAdapter);
+        setListAdapter(listAdapter);
         checkPreviouslyCheckedItems();
     }
 
@@ -146,7 +147,7 @@ public class DataManagerList extends InstanceListFragment
 
     @Override
     protected void updateAdapter() {
-        mListAdapter.changeCursor(getCursor());
+        listAdapter.changeCursor(getCursor());
         super.updateAdapter();
     }
 
@@ -161,9 +162,9 @@ public class DataManagerList extends InstanceListFragment
         logger.logAction(this, "createDeleteInstancesDialog",
                 "show");
 
-        mAlertDialog = new AlertDialog.Builder(getContext()).create();
-        mAlertDialog.setTitle(getString(R.string.delete_file));
-        mAlertDialog.setMessage(getString(R.string.delete_confirm,
+        alertDialog = new AlertDialog.Builder(getContext()).create();
+        alertDialog.setTitle(getString(R.string.delete_file));
+        alertDialog.setMessage(getString(R.string.delete_confirm,
                 String.valueOf(getCheckedCount())));
         DialogInterface.OnClickListener dialogYesNoListener =
                 new DialogInterface.OnClickListener() {
@@ -175,7 +176,7 @@ public class DataManagerList extends InstanceListFragment
                                         "createDeleteInstancesDialog", "delete");
                                 deleteSelectedInstances();
                                 if (getListView().getCount() == getCheckedCount()) {
-                                    mToggleButton.setEnabled(false);
+                                    toggleButton.setEnabled(false);
                                 }
                                 break;
                             case DialogInterface.BUTTON_NEGATIVE: // do nothing
@@ -185,12 +186,18 @@ public class DataManagerList extends InstanceListFragment
                         }
                     }
                 };
-        mAlertDialog.setCancelable(false);
-        mAlertDialog.setButton(DialogInterface.BUTTON_POSITIVE, getString(R.string.delete_yes),
+        alertDialog.setCancelable(false);
+        alertDialog.setButton(DialogInterface.BUTTON_POSITIVE, getString(R.string.delete_yes),
                 dialogYesNoListener);
-        mAlertDialog.setButton(DialogInterface.BUTTON_NEGATIVE, getString(R.string.delete_no),
+        alertDialog.setButton(DialogInterface.BUTTON_NEGATIVE, getString(R.string.delete_no),
                 dialogYesNoListener);
-        mAlertDialog.show();
+        alertDialog.show();
+    }
+
+    @Override
+    public void progressUpdate(int progress, int total) {
+        String message = String.format(getResources().getString(R.string.deleting_form_dialog_update_message),progress,total);
+        progressDialog.setMessage(message);
     }
 
     /**
@@ -198,11 +205,17 @@ public class DataManagerList extends InstanceListFragment
      * from the filesystem.
      */
     private void deleteSelectedInstances() {
-        if (mDeleteInstancesTask == null) {
-            mDeleteInstancesTask = new DeleteInstancesTask();
-            mDeleteInstancesTask.setContentResolver(getActivity().getContentResolver());
-            mDeleteInstancesTask.setDeleteListener(this);
-            mDeleteInstancesTask.execute(getCheckedIdObjects());
+        if (deleteInstancesTask == null) {
+            progressDialog = new ProgressDialog(getContext());
+            progressDialog.setMessage(getResources().getString(R.string.form_delete_message));
+            progressDialog.setIndeterminate(true);
+            progressDialog.setCancelable(false);
+            progressDialog.show();
+
+            deleteInstancesTask = new DeleteInstancesTask();
+            deleteInstancesTask.setContentResolver(getActivity().getContentResolver());
+            deleteInstancesTask.setDeleteListener(this);
+            deleteInstancesTask.execute(getCheckedIdObjects());
         } else {
             ToastUtils.showLongToast(R.string.file_delete_in_progress);
         }
@@ -218,7 +231,7 @@ public class DataManagerList extends InstanceListFragment
         Timber.i("Delete instances complete");
         logger.logAction(this, "deleteComplete",
                 Integer.toString(deletedInstances));
-        final int toDeleteCount = mDeleteInstancesTask.getToDeleteCount();
+        final int toDeleteCount = deleteInstancesTask.getToDeleteCount();
 
         if (deletedInstances == toDeleteCount) {
             // all deletes were successful
@@ -230,12 +243,15 @@ public class DataManagerList extends InstanceListFragment
                     String.valueOf(toDeleteCount - deletedInstances),
                     String.valueOf(toDeleteCount)));
         }
-        mDeleteInstancesTask = null;
+
+        deleteInstancesTask = null;
         getListView().clearChoices(); // doesn't unset the checkboxes
         for (int i = 0; i < getListView().getCount(); ++i) {
             getListView().setItemChecked(i, false);
         }
-        mDeleteButton.setEnabled(false);
+        deleteButton.setEnabled(false);
+
+        progressDialog.dismiss();
     }
 
     @Override
@@ -254,8 +270,8 @@ public class DataManagerList extends InstanceListFragment
             case R.id.toggle_button:
                 ListView lv = getListView();
                 boolean allChecked = toggleChecked(lv);
-                toggleButtonLabel(mToggleButton, getListView());
-                mDeleteButton.setEnabled(allChecked);
+                toggleButtonLabel(toggleButton, getListView());
+                deleteButton.setEnabled(allChecked);
                 break;
         }
     }

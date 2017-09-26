@@ -14,6 +14,7 @@
 
 package org.odk.collect.android.widgets;
 
+import android.annotation.SuppressLint;
 import android.content.Context;
 import android.view.Gravity;
 import android.view.inputmethod.InputMethodManager;
@@ -22,9 +23,8 @@ import android.widget.LinearLayout;
 import org.javarosa.core.model.data.DateTimeData;
 import org.javarosa.core.model.data.IAnswerData;
 import org.javarosa.form.api.FormEntryPrompt;
-
-import org.joda.time.DateTimeZone;
 import org.joda.time.LocalDateTime;
+
 /**
  * Displays a DatePicker widget. DateWidget handles leap years and does not allow dates that do not
  * exist.
@@ -33,79 +33,76 @@ import org.joda.time.LocalDateTime;
  * @author Yaw Anokwa (yanokwa@gmail.com)
  */
 
+@SuppressLint("ViewConstructor")
 public class DateTimeWidget extends QuestionWidget {
 
-    private DateWidget mDateWidget;
-    private TimeWidget mTimeWidget;
+    private DateWidget dateWidget;
+    private TimeWidget timeWidget;
 
     public DateTimeWidget(Context context, FormEntryPrompt prompt) {
         super(context, prompt);
 
         setGravity(Gravity.START);
 
-        mDateWidget = new DateWidget(context, prompt);
-        mTimeWidget = new TimeWidget(context, prompt);
+        dateWidget = new DateWidget(context, prompt);
+        timeWidget = new TimeWidget(context, prompt);
 
-        mDateWidget.mQuestionMediaLayout.getView_Text().setVisibility(GONE);
-        mTimeWidget.mQuestionMediaLayout.getView_Text().setVisibility(GONE);
+        dateWidget.questionMediaLayout.getView_Text().setVisibility(GONE);
+        dateWidget.getHelpTextView().setVisibility(GONE);
+
+        timeWidget.questionMediaLayout.getView_Text().setVisibility(GONE);
+        timeWidget.getHelpTextView().setVisibility(GONE);
 
         LinearLayout linearLayout = new LinearLayout(getContext());
         linearLayout.setOrientation(LinearLayout.VERTICAL);
-        linearLayout.addView(mDateWidget);
-        if (mDateWidget.isCalendarShown() || !mDateWidget.isDayHidden()) {
-            linearLayout.addView(mTimeWidget);
+        linearLayout.addView(dateWidget);
+        if (!dateWidget.isDayHidden()) {
+            linearLayout.addView(timeWidget);
         }
         addAnswerView(linearLayout);
-        if (mDateWidget.isCalendarShown() && mTimeWidget.getAnswer() == null) {
-            mTimeWidget.setTimeToCurrent();
-            mTimeWidget.setTimeLabel();
-        }
     }
 
     @Override
     public IAnswerData getAnswer() {
         clearFocus();
 
-        if (mDateWidget.isNullAnswer() && mTimeWidget.isNullAnswer()) {
+        if (dateWidget.isNullAnswer() && timeWidget.isNullAnswer()) {
             return null;
         } else {
-            if (mTimeWidget.isNullAnswer()) {
-                mTimeWidget.setTimeToCurrent();
-                mTimeWidget.setTimeLabel();
-            } else if (mDateWidget.isNullAnswer()) {
-                mDateWidget.setDateToCurrent();
-                mDateWidget.setDateLabel();
+            if (timeWidget.isNullAnswer()) {
+                timeWidget.setTimeToCurrent();
+                timeWidget.setTimeLabel();
+            } else if (dateWidget.isNullAnswer()) {
+                dateWidget.setDateToCurrent();
+                dateWidget.setDateLabel();
             }
-            
-            boolean hideDay = mDateWidget.isDayHidden();
-            boolean hideMonth = mDateWidget.isMonthHidden();
-            boolean showCalendar = mDateWidget.isCalendarShown();
 
-            int year = mDateWidget.getYear();
-            int month = mDateWidget.getMonth();
-            int day = mDateWidget.getDay();
-            int hour = mTimeWidget.getHour();
-            int minute = mTimeWidget.getMinute();
+            boolean hideDay = dateWidget.isDayHidden();
+            boolean hideMonth = dateWidget.isMonthHidden();
+
+            int year = dateWidget.getYear();
+            int month = dateWidget.getMonth();
+            int day = dateWidget.getDay();
+            int hour = timeWidget.getHour();
+            int minute = timeWidget.getMinute();
 
             LocalDateTime ldt = new LocalDateTime()
                     .withYear(year)
-                    .withMonthOfYear((!showCalendar && hideMonth) ? 1 : month)
-                    .withDayOfMonth((!showCalendar && (hideMonth || hideDay)) ? 1 : day)
-                    .withHourOfDay((!showCalendar && (hideMonth || hideDay)) ? 0 : hour)
-                    .withMinuteOfHour((!showCalendar && (hideMonth || hideDay)) ? 0 : minute)
-                    .withSecondOfMinute(0);
+                    .withMonthOfYear(hideMonth ? 1 : month)
+                    .withDayOfMonth((hideMonth || hideDay) ? 1 : day)
+                    .withHourOfDay((hideMonth || hideDay) ? 0 : hour)
+                    .withMinuteOfHour((hideMonth || hideDay) ? 0 : minute)
+                    .withSecondOfMinute(0)
+                    .withMillisOfSecond(0);
 
-            ldt = skipDaylightSavingGapIfExists(ldt);
             return new DateTimeData(ldt.toDate());
         }
     }
 
     @Override
     public void clearAnswer() {
-        if (!mDateWidget.isCalendarShown()) {
-            mDateWidget.clearAnswer();
-            mTimeWidget.clearAnswer();
-        }
+        dateWidget.clearAnswer();
+        timeWidget.clearAnswer();
     }
 
     @Override
@@ -118,27 +115,32 @@ public class DateTimeWidget extends QuestionWidget {
 
     @Override
     public void setOnLongClickListener(OnLongClickListener l) {
-        mDateWidget.setOnLongClickListener(l);
-        mTimeWidget.setOnLongClickListener(l);
+        dateWidget.setOnLongClickListener(l);
+        timeWidget.setOnLongClickListener(l);
     }
 
     @Override
     public void cancelLongPress() {
         super.cancelLongPress();
-        mDateWidget.cancelLongPress();
-        mTimeWidget.cancelLongPress();
+        dateWidget.cancelLongPress();
+        timeWidget.cancelLongPress();
     }
 
-    // Skip over a "daylight savings gap". This is needed on the day and time of a daylight savings
-    // transition because that date/time doesn't exist.
-    // Today clocks are almost always set one hour back or ahead.
-    // Throughout history there have been several variations, like half adjustments (30 minutes) or
-    // double adjustment (two hours). Adjustments of 20 and 40 minutes have also been used.
-    // https://www.timeanddate.com/time/dst/
-    private LocalDateTime skipDaylightSavingGapIfExists(LocalDateTime ldt) {
-        while (DateTimeZone.getDefault().isLocalDateTimeGap(ldt)) {
-            ldt = ldt.plusMinutes(1);
-        }
-        return ldt;
+    public DateWidget getDateWidget() {
+        return dateWidget;
+    }
+
+    public TimeWidget getTimeWidget() {
+        return timeWidget;
+    }
+
+    // Exposed for testing purposes to avoid reflection.
+    public void setDateWidget(DateWidget dateWidget) {
+        this.dateWidget = dateWidget;
+    }
+
+    // Exposed for testing purposes to avoid reflection.
+    public void setTimeWidget(TimeWidget timeWidget) {
+        this.timeWidget = timeWidget;
     }
 }

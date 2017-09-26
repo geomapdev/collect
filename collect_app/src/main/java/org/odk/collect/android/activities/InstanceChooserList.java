@@ -23,7 +23,7 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.view.View;
-import android.widget.ListView;
+import android.widget.AdapterView;
 import android.widget.SimpleCursorAdapter;
 import android.widget.TextView;
 
@@ -43,21 +43,19 @@ import org.odk.collect.android.utilities.ApplicationConstants;
  * @author Yaw Anokwa (yanokwa@gmail.com)
  * @author Carl Hartung (carlhartung@gmail.com)
  */
-public class InstanceChooserList extends InstanceListActivity implements DiskSyncListener {
+public class InstanceChooserList extends InstanceListActivity implements DiskSyncListener, AdapterView.OnItemClickListener {
     private static final String INSTANCE_LIST_ACTIVITY_SORTING_ORDER = "instanceListActivitySortingOrder";
     private static final String VIEW_SENT_FORM_SORTING_ORDER = "ViewSentFormSortingOrder";
 
     private static final boolean EXIT = true;
     private static final boolean DO_NOT_EXIT = false;
-    private AlertDialog mAlertDialog;
 
     private InstanceSyncTask instanceSyncTask;
 
-    private boolean mEditMode;
+    private boolean editMode;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
 
         // must be at the beginning of any activity that can be called from an external intent
         try {
@@ -68,22 +66,26 @@ public class InstanceChooserList extends InstanceListActivity implements DiskSyn
         }
 
         setContentView(R.layout.chooser_list_layout);
+        super.onCreate(savedInstanceState);
 
         String formMode = getIntent().getStringExtra(ApplicationConstants.BundleKeys.FORM_MODE);
         if (formMode == null || ApplicationConstants.FormModes.EDIT_SAVED.equalsIgnoreCase(formMode)) {
+
             setTitle(getString(R.string.review_data));
-            mEditMode = true;
-            mSortingOptions = new String[]{
+            editMode = true;
+            sortingOptions = new String[]{
                     getString(R.string.sort_by_name_asc), getString(R.string.sort_by_name_desc),
                     getString(R.string.sort_by_date_asc), getString(R.string.sort_by_date_desc),
                     getString(R.string.sort_by_status_asc), getString(R.string.sort_by_status_desc)
             };
         } else {
             setTitle(getString(R.string.view_sent_forms));
-            mSortingOptions = new String[]{
+
+            sortingOptions = new String[]{
                     getString(R.string.sort_by_name_asc), getString(R.string.sort_by_name_desc),
                     getString(R.string.sort_by_date_asc), getString(R.string.sort_by_date_desc)
             };
+            ((TextView) findViewById(android.R.id.empty)).setText(R.string.no_items_display_sent_forms);
         }
         setupAdapter();
 
@@ -101,8 +103,8 @@ public class InstanceChooserList extends InstanceListActivity implements DiskSyn
      * Stores the path of selected instance in the parent class and finishes.
      */
     @Override
-    protected void onListItemClick(ListView listView, View view, int position, long id) {
-        Cursor c = (Cursor) getListAdapter().getItem(position);
+    public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+        Cursor c = (Cursor) listView.getAdapter().getItem(position);
         startManagingCursor(c);
         Uri instanceUri =
                 ContentUris.withAppendedId(InstanceColumns.CONTENT_URI,
@@ -192,27 +194,27 @@ public class InstanceChooserList extends InstanceListActivity implements DiskSyn
                 R.id.text1, R.id.text2, R.id.text4
         };
 
-        if (mEditMode) {
-            mListAdapter = new SimpleCursorAdapter(this, R.layout.two_item, getCursor(), data, view);
+        if (editMode) {
+            listAdapter = new SimpleCursorAdapter(this, R.layout.two_item, getCursor(), data, view);
         } else {
-            mListAdapter = new ViewSentListAdapter(this, R.layout.two_item, getCursor(), data, view);
+            listAdapter = new ViewSentListAdapter(this, R.layout.two_item, getCursor(), data, view);
         }
-        setListAdapter(mListAdapter);
+        listView.setAdapter(listAdapter);
     }
 
     @Override
     protected String getSortingOrderKey() {
-        return mEditMode ? INSTANCE_LIST_ACTIVITY_SORTING_ORDER : VIEW_SENT_FORM_SORTING_ORDER;
+        return editMode ? INSTANCE_LIST_ACTIVITY_SORTING_ORDER : VIEW_SENT_FORM_SORTING_ORDER;
     }
 
     @Override
     protected void updateAdapter() {
-        mListAdapter.changeCursor(getCursor());
+        listAdapter.changeCursor(getCursor());
     }
 
     private Cursor getCursor() {
         Cursor cursor;
-        if (mEditMode) {
+        if (editMode) {
             cursor = new InstancesDao().getUnsentInstancesCursor(getFilterText(), getSortingOrder());
         } else {
             cursor = new InstancesDao().getSentInstancesCursor(getFilterText(), getSortingOrder());
@@ -224,9 +226,9 @@ public class InstanceChooserList extends InstanceListActivity implements DiskSyn
     private void createErrorDialog(String errorMsg, final boolean shouldExit) {
         Collect.getInstance().getActivityLogger().logAction(this, "createErrorDialog", "show");
 
-        mAlertDialog = new AlertDialog.Builder(this).create();
-        mAlertDialog.setIcon(android.R.drawable.ic_dialog_info);
-        mAlertDialog.setMessage(errorMsg);
+        AlertDialog alertDialog = new AlertDialog.Builder(this).create();
+        alertDialog.setIcon(android.R.drawable.ic_dialog_info);
+        alertDialog.setMessage(errorMsg);
         DialogInterface.OnClickListener errorListener = new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int i) {
@@ -242,9 +244,9 @@ public class InstanceChooserList extends InstanceListActivity implements DiskSyn
                 }
             }
         };
-        mAlertDialog.setCancelable(false);
-        mAlertDialog.setButton(getString(R.string.ok), errorListener);
-        mAlertDialog.show();
+        alertDialog.setCancelable(false);
+        alertDialog.setButton(getString(R.string.ok), errorListener);
+        alertDialog.show();
     }
 
 

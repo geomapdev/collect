@@ -49,11 +49,11 @@ import timber.log.Timber;
  */
 public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
 
-    private FormSavedListener mSavedListener;
-    private Boolean mSave;
-    private Boolean mMarkCompleted;
-    private Uri mUri;
-    private String mInstanceName;
+    private FormSavedListener savedListener;
+    private boolean save;
+    private boolean markCompleted;
+    private Uri uri;
+    private String instanceName;
 
     public static final int SAVED = 500;
     public static final int SAVE_ERROR = 501;
@@ -63,11 +63,11 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
     public static final int ENCRYPTION_ERROR = 505;
 
 
-    public SaveToDiskTask(Uri uri, Boolean saveAndExit, Boolean markCompleted, String updatedName) {
-        mUri = uri;
-        mSave = saveAndExit;
-        mMarkCompleted = markCompleted;
-        mInstanceName = updatedName;
+    public SaveToDiskTask(Uri uri, boolean saveAndExit, boolean markCompleted, String updatedName) {
+        this.uri = uri;
+        save = saveAndExit;
+        this.markCompleted = markCompleted;
+        instanceName = updatedName;
     }
 
 
@@ -85,10 +85,10 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
         publishProgress(Collect.getInstance().getString(R.string.survey_saving_validating_message));
 
         try {
-            int validateStatus = formController.validateAnswers(mMarkCompleted);
+            int validateStatus = formController.validateAnswers(markCompleted);
             if (validateStatus != FormEntryController.ANSWER_OK) {
                 // validation failed, pass specific failure
-                saveResult.setSaveResult(validateStatus);
+                saveResult.setSaveResult(validateStatus, markCompleted);
                 return saveResult;
             }
         } catch (Exception e) {
@@ -98,7 +98,7 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
             // that means that we have a bad design
             // save the exception to be used in the error dialog.
             saveResult.setSaveErrorMessage(e.getMessage());
-            saveResult.setSaveResult(SAVE_ERROR);
+            saveResult.setSaveResult(SAVE_ERROR, markCompleted);
             return saveResult;
         }
 
@@ -107,12 +107,12 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
             return null;
         }
 
-        if (mMarkCompleted) {
+        if (markCompleted) {
             formController.postProcessInstance();
         }
 
         Collect.getInstance().getActivityLogger().logInstanceAction(this, "save",
-                Boolean.toString(mMarkCompleted));
+                Boolean.toString(markCompleted));
 
         // close all open databases of external data.
         Collect.getInstance().getExternalDataManager().close();
@@ -121,11 +121,11 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
         // just in case the validate somehow triggered an update.
         String updatedSaveName = formController.getSubmissionMetadata().instanceName;
         if (updatedSaveName != null) {
-            mInstanceName = updatedSaveName;
+            instanceName = updatedSaveName;
         }
 
         try {
-            exportData(mMarkCompleted);
+            exportData(markCompleted);
 
             // attempt to remove any scratch file
             File shadowInstance = savepointFile(formController.getInstancePath());
@@ -133,15 +133,15 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
                 FileUtils.deleteAndReport(shadowInstance);
             }
 
-            saveResult.setSaveResult(mSave ? SAVED_AND_EXIT : SAVED);
+            saveResult.setSaveResult(save ? SAVED_AND_EXIT : SAVED, markCompleted);
         } catch (EncryptionException e) {
             saveResult.setSaveErrorMessage(e.getMessage());
-            saveResult.setSaveResult(ENCRYPTION_ERROR);
+            saveResult.setSaveResult(ENCRYPTION_ERROR, markCompleted);
         } catch (Exception e) {
             Timber.e(e);
 
             saveResult.setSaveErrorMessage(e.getMessage());
-            saveResult.setSaveResult(SAVE_ERROR);
+            saveResult.setSaveResult(SAVE_ERROR, markCompleted);
         }
 
         return saveResult;
@@ -153,10 +153,10 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
 
         // Update the instance database...
         ContentValues values = new ContentValues();
-        if (mInstanceName != null) {
-            values.put(InstanceColumns.DISPLAY_NAME, mInstanceName);
+        if (instanceName != null) {
+            values.put(InstanceColumns.DISPLAY_NAME, instanceName);
         }
-        if (incomplete || !mMarkCompleted) {
+        if (incomplete || !markCompleted) {
             values.put(InstanceColumns.STATUS, InstanceProviderAPI.STATUS_INCOMPLETE);
         } else {
             values.put(InstanceColumns.STATUS, InstanceProviderAPI.STATUS_COMPLETE);
@@ -165,18 +165,18 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
         values.put(InstanceColumns.CAN_EDIT_WHEN_COMPLETE, Boolean.toString(canEditAfterCompleted));
 
         // If FormEntryActivity was started with an Instance, just update that instance
-        if (Collect.getInstance().getContentResolver().getType(mUri).equals(
+        if (Collect.getInstance().getContentResolver().getType(uri).equals(
                 InstanceColumns.CONTENT_ITEM_TYPE)) {
-            int updated = Collect.getInstance().getContentResolver().update(mUri, values, null,
+            int updated = Collect.getInstance().getContentResolver().update(uri, values, null,
                     null);
             if (updated > 1) {
-                Timber.w("Updated more than one entry, that's not good: %s", mUri.toString());
+                Timber.w("Updated more than one entry, that's not good: %s", uri.toString());
             } else if (updated == 1) {
                 Timber.i("Instance successfully updated");
             } else {
-                Timber.e("Instance doesn't exist but we have its Uri!! %s", mUri.toString());
+                Timber.e("Instance doesn't exist but we have its Uri!! %s", uri.toString());
             }
-        } else if (Collect.getInstance().getContentResolver().getType(mUri).equals(
+        } else if (Collect.getInstance().getContentResolver().getType(uri).equals(
                 FormsColumns.CONTENT_ITEM_TYPE)) {
             // If FormEntryActivity was started with a form, then it's likely the first time we're
             // saving.
@@ -200,11 +200,9 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
                 Cursor c = null;
                 try {
                     // retrieve the form definition...
-                    c = Collect.getInstance().getContentResolver().query(mUri, null, null, null,
+                    c = Collect.getInstance().getContentResolver().query(uri, null, null, null,
                             null);
                     c.moveToFirst();
-                    String jrformid = c.getString(c.getColumnIndex(FormsColumns.JR_FORM_ID));
-                    String jrversion = c.getString(c.getColumnIndex(FormsColumns.JR_VERSION));
                     String formname = c.getString(c.getColumnIndex(FormsColumns.DISPLAY_NAME));
                     String submissionUri = null;
                     if (!c.isNull(c.getColumnIndex(FormsColumns.SUBMISSION_URI))) {
@@ -214,11 +212,13 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
                     // add missing fields into values
                     values.put(InstanceColumns.INSTANCE_FILE_PATH, instancePath);
                     values.put(InstanceColumns.SUBMISSION_URI, submissionUri);
-                    if (mInstanceName != null) {
-                        values.put(InstanceColumns.DISPLAY_NAME, mInstanceName);
+                    if (instanceName != null) {
+                        values.put(InstanceColumns.DISPLAY_NAME, instanceName);
                     } else {
                         values.put(InstanceColumns.DISPLAY_NAME, formname);
                     }
+                    String jrformid = c.getString(c.getColumnIndex(FormsColumns.JR_FORM_ID));
+                    String jrversion = c.getString(c.getColumnIndex(FormsColumns.JR_VERSION));
                     values.put(InstanceColumns.JR_FORM_ID, jrformid);
                     values.put(InstanceColumns.JR_VERSION, jrversion);
                 } finally {
@@ -226,7 +226,7 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
                         c.close();
                     }
                 }
-                mUri = new InstancesDao().saveInstance(values);
+                uri = new InstancesDao().saveInstance(values);
             }
         }
     }
@@ -257,7 +257,7 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
 
         exportXmlFile(payload, instancePath);
 
-        // update the mUri. We have exported the reloadable instance, so update status...
+        // update the uri. We have exported the reloadable instance, so update status...
         // Since we saved a reloadable instance, it is flagged as re-openable so that if any error
         // occurs during the packaging of the data for the server fails (e.g., encryption),
         // we can still reopen the filled-out form and re-save it at a later time.
@@ -286,7 +286,7 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
             exportXmlFile(payload, submissionXml.getAbsolutePath());
 
             // see if the form is encrypted and we can encrypt it...
-            EncryptedFormInformation formInfo = EncryptionUtils.getEncryptedFormInformation(mUri,
+            EncryptedFormInformation formInfo = EncryptionUtils.getEncryptedFormInformation(uri,
                     formController.getSubmissionMetadata());
             if (formInfo != null) {
                 // if we are encrypting, the form cannot be reopened afterward
@@ -408,9 +408,9 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
     protected void onProgressUpdate(String... values) {
         super.onProgressUpdate(values);
 
-        if (mSavedListener != null && values != null) {
+        if (savedListener != null && values != null) {
             if (values.length == 1) {
-                mSavedListener.onProgressStep(values[0]);
+                savedListener.onProgressStep(values[0]);
             }
         }
     }
@@ -418,8 +418,8 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
     @Override
     protected void onPostExecute(SaveResult result) {
         synchronized (this) {
-            if (mSavedListener != null && result != null) {
-                mSavedListener.savingComplete(result);
+            if (savedListener != null && result != null) {
+                savedListener.savingComplete(result);
             }
         }
     }
@@ -427,7 +427,7 @@ public class SaveToDiskTask extends AsyncTask<Void, String, SaveResult> {
 
     public void setFormSavedListener(FormSavedListener fsl) {
         synchronized (this) {
-            mSavedListener = fsl;
+            savedListener = fsl;
         }
     }
 

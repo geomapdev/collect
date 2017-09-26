@@ -34,17 +34,16 @@ import java.util.Date;
 import java.util.Locale;
 
 public class ViewSentListAdapter extends SimpleCursorAdapter {
-    private Context mContext;
+    private Context context;
 
     public ViewSentListAdapter(Context context, int layout, Cursor c, String[] from, int[] to) {
         super(context, layout, c, from, to);
-        mContext = context;
+        this.context = context;
     }
 
     @Override
     public View getView(int position, View convertView, ViewGroup parent) {
         View view = super.getView(position, convertView, parent);
-        Long date = getCursor().getLong(getCursor().getColumnIndex(InstanceProviderAPI.InstanceColumns.DELETED_DATE));
 
         String formId = getCursor().getString(getCursor().getColumnIndex(InstanceProviderAPI.InstanceColumns.JR_FORM_ID));
         Cursor cursor = new FormsDao().getFormsCursorForFormId(formId);
@@ -66,6 +65,8 @@ public class ViewSentListAdapter extends SimpleCursorAdapter {
 
         TextView visibilityOffCause = (TextView) view.findViewById(R.id.text4);
         ImageView visibleOff = (ImageView) view.findViewById(R.id.visible_off);
+        Long date = getCursor().getLong(getCursor().getColumnIndex(InstanceProviderAPI.InstanceColumns.DELETED_DATE));
+
         visibleOff.setScaleX(0.9f);
         visibleOff.setScaleY(0.9f);
         if (date != 0 || !formExists || isFormEncrypted) {
@@ -74,12 +75,12 @@ public class ViewSentListAdapter extends SimpleCursorAdapter {
 
             if (date != 0) {
                 visibilityOffCause.setText(
-                        new SimpleDateFormat(mContext.getString(R.string.deleted_on_date_at_time),
+                        new SimpleDateFormat(context.getString(R.string.deleted_on_date_at_time),
                                 Locale.getDefault()).format(new Date(date)));
             } else if (!formExists) {
-                visibilityOffCause.setText(mContext.getString(R.string.deleted_form));
+                visibilityOffCause.setText(context.getString(R.string.deleted_form));
             } else {
-                visibilityOffCause.setText(mContext.getString(R.string.encrypted_form));
+                visibilityOffCause.setText(context.getString(R.string.encrypted_form));
             }
         } else {
             visibilityOffCause.setVisibility(View.GONE);

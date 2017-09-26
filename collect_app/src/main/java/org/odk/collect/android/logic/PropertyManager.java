@@ -61,7 +61,7 @@ public class PropertyManager implements IPropertyManager {
     private static final String SCHEME_IMEI         = "imei";
     private static final String SCHEME_MAC          = "mac";
 
-    private final Map<String, String> mProperties = new HashMap<>();
+    private final Map<String, String> properties = new HashMap<>();
 
     public String getName() {
         return "Property Manager";
@@ -80,19 +80,23 @@ public class PropertyManager implements IPropertyManager {
     public PropertyManager(Context context) {
         Timber.i("calling constructor");
 
-        // Device-defined properties
-        TelephonyManager telMgr = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
-        IdAndPrefix idp = findDeviceId(context, telMgr);
-        putProperty(PROPMGR_DEVICE_ID,     idp.prefix,          idp.id);
-        putProperty(PROPMGR_PHONE_NUMBER,  SCHEME_TEL,          telMgr.getLine1Number());
-        putProperty(PROPMGR_SUBSCRIBER_ID, SCHEME_IMSI,         telMgr.getSubscriberId());
-        putProperty(PROPMGR_SIM_SERIAL,    SCHEME_SIMSERIAL,    telMgr.getSimSerialNumber());
+        try {
+            // Device-defined properties
+            TelephonyManager telMgr = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+            IdAndPrefix idp = findDeviceId(context, telMgr);
+            putProperty(PROPMGR_DEVICE_ID,     idp.prefix,          idp.id);
+            putProperty(PROPMGR_PHONE_NUMBER,  SCHEME_TEL,          telMgr.getLine1Number());
+            putProperty(PROPMGR_SUBSCRIBER_ID, SCHEME_IMSI,         telMgr.getSubscriberId());
+            putProperty(PROPMGR_SIM_SERIAL,    SCHEME_SIMSERIAL,    telMgr.getSimSerialNumber());
 
-        // User-defined properties. Will replace any above with the same PROPMGR_ name.
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
-        initUserDefined(prefs, KEY_METADATA_USERNAME,    PROPMGR_USERNAME,      SCHEME_USERNAME);
-        initUserDefined(prefs, KEY_METADATA_PHONENUMBER, PROPMGR_PHONE_NUMBER,  SCHEME_TEL);
-        initUserDefined(prefs, KEY_METADATA_EMAIL,       PROPMGR_EMAIL,         SCHEME_MAILTO);
+            // User-defined properties. Will replace any above with the same PROPMGR_ name.
+            SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+            initUserDefined(prefs, KEY_METADATA_USERNAME,    PROPMGR_USERNAME,      SCHEME_USERNAME);
+            initUserDefined(prefs, KEY_METADATA_PHONENUMBER, PROPMGR_PHONE_NUMBER,  SCHEME_TEL);
+            initUserDefined(prefs, KEY_METADATA_EMAIL,       PROPMGR_EMAIL,         SCHEME_MAILTO);
+        } catch (SecurityException e) {
+            Timber.e(e);
+        }
     }
 
     private IdAndPrefix findDeviceId(Context context, TelephonyManager telephonyManager) {
@@ -145,8 +149,8 @@ public class PropertyManager implements IPropertyManager {
 
     private void putProperty(String propName, String scheme, String value) {
         if (value != null) {
-            mProperties.put(propName, value);
-            mProperties.put(withUri(propName), scheme + ":" + value);
+            properties.put(propName, value);
+            properties.put(withUri(propName), scheme + ":" + value);
         }
     }
 
@@ -158,7 +162,7 @@ public class PropertyManager implements IPropertyManager {
     @Override
     public String getSingularProperty(String propertyName) {
         // for now, all property names are in english...
-        return mProperties.get(propertyName.toLowerCase(Locale.ENGLISH));
+        return properties.get(propertyName.toLowerCase(Locale.ENGLISH));
     }
 
     @Override

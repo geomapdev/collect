@@ -2,16 +2,33 @@ package org.odk.collect.android.test;
 
 import android.os.Environment;
 
+import org.odk.collect.android.application.Collect;
+import org.odk.collect.android.preferences.GeneralSharedPreferences;
+import org.odk.collect.android.provider.InstanceProviderAPI;
+
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-
-import org.odk.collect.android.application.Collect;
-import org.odk.collect.android.provider.InstanceProviderAPI;
+import java.util.Collections;
+import java.util.Map;
 
 public final class TestUtils {
-    private TestUtils() {}
+    private TestUtils() {
+    }
+
+    public static Map<String, ?> backupPreferences() {
+        return Collections.unmodifiableMap(GeneralSharedPreferences.getInstance().getAll());
+    }
+
+    public static void restorePreferences(Map<String, ?> backup) {
+        GeneralSharedPreferences.getInstance().clear();
+
+        for (Map.Entry<String, ?> e : backup.entrySet()) {
+            Object v = e.getValue();
+            GeneralSharedPreferences.getInstance().save(e.getKey(), v);
+        }
+    }
 
     public static File createTempFile(String content) throws Exception {
         File f = createTempFile();

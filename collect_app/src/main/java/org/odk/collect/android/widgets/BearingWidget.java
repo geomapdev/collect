@@ -14,16 +14,14 @@
 
 package org.odk.collect.android.widgets;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.util.TypedValue;
-import android.view.Gravity;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
-import android.widget.TableLayout;
 import android.widget.TextView;
 
 import org.javarosa.core.model.data.IAnswerData;
@@ -33,65 +31,52 @@ import org.odk.collect.android.R;
 import org.odk.collect.android.activities.BearingActivity;
 import org.odk.collect.android.activities.FormEntryActivity;
 import org.odk.collect.android.application.Collect;
+import org.odk.collect.android.logic.FormController;
 
 /**
  * BearingWidget is the widget that allows the user to get a compass heading.
  *
  * @author Carl Hartung (chartung@nafundi.com)
  */
-public class BearingWidget extends QuestionWidget implements IBinaryWidget {
-    private Button mGetBearingButton;
-    private TextView mStringAnswer;
-    private TextView mAnswerDisplay;
+@SuppressLint("ViewConstructor")
+public class BearingWidget extends QuestionWidget implements BinaryWidget {
+    private Button getBearingButton;
+    private TextView answerDisplay;
 
     public BearingWidget(Context context, FormEntryPrompt prompt) {
         super(context, prompt);
 
-        TableLayout.LayoutParams params = new TableLayout.LayoutParams();
-        params.setMargins(7, 5, 7, 5);
-
-        mGetBearingButton = new Button(getContext());
-        mGetBearingButton.setId(QuestionWidget.newUniqueId());
-        mGetBearingButton.setPadding(20, 20, 20, 20);
-        mGetBearingButton.setText(getContext()
-                .getString(R.string.get_bearing));
-        mGetBearingButton.setTextSize(TypedValue.COMPLEX_UNIT_DIP,
-                mAnswerFontsize);
-        mGetBearingButton.setEnabled(!prompt.isReadOnly());
-        mGetBearingButton.setLayoutParams(params);
+        getBearingButton = getSimpleButton(getContext().getString(R.string.get_bearing));
+        getBearingButton.setEnabled(!prompt.isReadOnly());
         if (prompt.isReadOnly()) {
-            mGetBearingButton.setVisibility(View.GONE);
+            getBearingButton.setVisibility(View.GONE);
         }
 
-        mStringAnswer = new TextView(getContext());
-        mStringAnswer.setId(QuestionWidget.newUniqueId());
-
-        mAnswerDisplay = new TextView(getContext());
-        mAnswerDisplay.setId(QuestionWidget.newUniqueId());
-        mAnswerDisplay
-                .setTextSize(TypedValue.COMPLEX_UNIT_DIP, mAnswerFontsize);
-        mAnswerDisplay.setGravity(Gravity.CENTER);
+        answerDisplay = getCenteredAnswerTextView();
 
         String s = prompt.getAnswerText();
         if (s != null && !s.equals("")) {
-            mGetBearingButton.setText(getContext().getString(
+            getBearingButton.setText(getContext().getString(
                     R.string.replace_bearing));
             setBinaryData(s);
         }
 
         // when you press the button
-        mGetBearingButton.setOnClickListener(new View.OnClickListener() {
+        getBearingButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 Collect.getInstance()
                         .getActivityLogger()
                         .logInstanceAction(this, "recordBearing", "click",
-                                mPrompt.getIndex());
-                Intent i = null;
+                                formEntryPrompt.getIndex());
+                Intent i;
                 i = new Intent(getContext(), BearingActivity.class);
 
-                Collect.getInstance().getFormController()
-                        .setIndexWaitingForData(mPrompt.getIndex());
+                FormController formController = Collect.getInstance().getFormController();
+                if (formController != null) {
+                    formController.setIndexWaitingForData(formEntryPrompt.getIndex());
+                }
+
                 ((Activity) getContext()).startActivityForResult(i,
                         FormEntryActivity.BEARING_CAPTURE);
             }
@@ -99,24 +84,22 @@ public class BearingWidget extends QuestionWidget implements IBinaryWidget {
 
         LinearLayout answerLayout = new LinearLayout(getContext());
         answerLayout.setOrientation(LinearLayout.VERTICAL);
-        answerLayout.addView(mGetBearingButton);
-        answerLayout.addView(mAnswerDisplay);
+        answerLayout.addView(getBearingButton);
+        answerLayout.addView(answerDisplay);
         addAnswerView(answerLayout);
     }
 
     @Override
     public void clearAnswer() {
-        mStringAnswer.setText(null);
-        mAnswerDisplay.setText(null);
-        mGetBearingButton.setText(getContext()
+        answerDisplay.setText(null);
+        getBearingButton.setText(getContext()
                 .getString(R.string.get_bearing));
-
     }
 
     @Override
     public IAnswerData getAnswer() {
-        String s = mStringAnswer.getText().toString();
-        if (s == null || s.equals("")) {
+        String s = answerDisplay.getText().toString();
+        if (s.equals("")) {
             return null;
         } else {
             return new StringData(s);
@@ -133,38 +116,39 @@ public class BearingWidget extends QuestionWidget implements IBinaryWidget {
 
     @Override
     public void setBinaryData(Object answer) {
-        String s = (String) answer;
-        mStringAnswer.setText(s);
-
-        mAnswerDisplay.setText(s);
-        Collect.getInstance().getFormController().setIndexWaitingForData(null);
+        answerDisplay.setText((String) answer);
+        cancelWaitingForBinaryData();
     }
 
     @Override
     public boolean isWaitingForBinaryData() {
-        return mPrompt.getIndex().equals(
-                Collect.getInstance().getFormController()
-                        .getIndexWaitingForData());
+        FormController formController = Collect.getInstance().getFormController();
+
+        return formController != null
+                && formEntryPrompt.getIndex().equals(formController.getIndexWaitingForData());
+
     }
 
     @Override
     public void cancelWaitingForBinaryData() {
-        Collect.getInstance().getFormController().setIndexWaitingForData(null);
+        FormController formController = Collect.getInstance().getFormController();
+        if (formController == null) {
+            return;
+        }
+
+        formController.setIndexWaitingForData(null);
     }
 
     @Override
     public void setOnLongClickListener(OnLongClickListener l) {
-        mGetBearingButton.setOnLongClickListener(l);
-        mStringAnswer.setOnLongClickListener(l);
-        mAnswerDisplay.setOnLongClickListener(l);
+        getBearingButton.setOnLongClickListener(l);
+        answerDisplay.setOnLongClickListener(l);
     }
 
     @Override
     public void cancelLongPress() {
         super.cancelLongPress();
-        mGetBearingButton.cancelLongPress();
-        mStringAnswer.cancelLongPress();
-        mAnswerDisplay.cancelLongPress();
+        getBearingButton.cancelLongPress();
+        answerDisplay.cancelLongPress();
     }
-
 }
